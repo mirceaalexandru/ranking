@@ -26,7 +26,7 @@ jobs:
         name: API
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Set up PHP
               uses: shivammathur/setup-php@v2
@@ -41,7 +41,7 @@ jobs:
               run: make validate-api
 
             - name: Cache dependencies
-              uses: actions/cache@v4
+              uses: actions/cache@v6
               with:
                   path: api/vendor
                   key: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-${{ hashFiles('api/composer.lock') }}
@@ -65,10 +65,10 @@ jobs:
         name: Web
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Set up Node
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
                   node-version: ${{ env.NODE_VERSION }}
                   cache: npm
@@ -89,7 +89,7 @@ jobs:
         name: Docker
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
 
             - name: Build images
               run: make build
