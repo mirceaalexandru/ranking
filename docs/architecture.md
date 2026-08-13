@@ -1,31 +1,43 @@
 # Architecture
 
-Satisfies [requirements.md](requirements.md) NFR-1 – NFR-4.
+Satisfies [requirements.md](requirements.md) NFR-1 – NFR-5.
 
 ---
 
 ## Stack
 
-| Layer    | Choice                                                                                   |
-| -------- | ---------------------------------------------------------------------------------------- |
+| Layer    | Choice                                                                                  |
+| -------- | --------------------------------------------------------------------------------------- |
 | Backend  | PHP 8.3, Symfony 7 (`symfony/skeleton` + only what is needed — not the full webapp pack) |
-| Domain   | Framework-free plain PHP, unit-tested directly with PHPUnit                              |
-| Database | MySQL 8 via Doctrine ORM                                                                 |
-| Frontend | React + TypeScript (strict), Vite                                                        |
-| Infra    | `docker compose` covering the whole stack                                                |
+| Domain   | Framework-free plain PHP, unit-tested directly with PHPUnit                             |
+| Input    | CSV, uploaded per run — the server keeps nothing                                        |
+| Frontend | React + TypeScript (strict), Vite                                                       |
+| Infra    | `docker compose` covering the whole stack                                               |
+
+**No database, and no state at all.** The exercise takes a budget history as input and produces a report;
+it asks for nothing to be stored. A budget history is a CSV file the user keeps, and a run is reproducible
+from `(history, seed)` — so nothing needs storing to be recoverable.
+
+`/api/simulate` is therefore a pure function: same CSV and same seed, same result, with no hidden state to
+reason about. That is what makes the invariant suite meaningful, and it means two people can use the app
+at once without interfering. It also sidesteps a PHP-specific trap — PHP-FPM serves each request in a
+separate worker process, so a server-side "working copy" would not survive a request without a shared
+backing store, which would be real complexity bought for a feature nobody asked for.
 
 Symfony provides HTTP, DI, validation and serialization **around** the domain, never inside it. The
 generator has no framework dependency, so its tests construct it directly and run in milliseconds without
 booting a kernel. That separation is the main structural decision here.
 
-The skeleton is preferred over `webapp-pack` because the application has a handful of endpoints and no
-Twig, Messenger, mailer or security surface.
+The skeleton is preferred over `webapp-pack` because the application has two endpoints and no Twig,
+Messenger, mailer or security surface.
 
 ## Layout
 
 ```
 apps/ranking/
 ├── docs/                       these documents
+├── fixtures/
+│   └── sample.csv              the exercise's budget history — test fixture and the downloadable example
 ├── api/                        Symfony application
 │   ├── src/
 │   │   ├── Domain/             framework-free — the exercise itself
@@ -38,46 +50,68 @@ apps/ranking/
 │   │   │   ├── CostGenerator.php          the chronological sweep, rule 1
 │   │   │   ├── SeededRandom.php           Randomizer wrapper
 │   │   │   └── DailyReportBuilder.php
+│   │   ├── Csv/
+│   │   │   └── BudgetHistoryReader.php    parse + validate, errors carry line numbers
 │   │   ├── Controller/         thin: deserialize → domain → serialize
 │   │   └── Dto/                request/response shapes, validated
-│   ├── tests/
-│   │   ├── Unit/               domain, no kernel
-│   │   ├── Invariant/          property-style, many seeds (INV-1 … INV-8)
-│   │   └── Functional/         API endpoints
-│   └── migrations/
+│   └── tests/
+│       ├── Unit/               domain and CSV parsing, no kernel
+│       ├── Invariant/          property-style, many seeds (INV-1 … INV-8)
+│       └── Functional/         the endpoints
 ├── web/                        React + Vite
 │   └── src/
 │       ├── api/                typed client
 │       ├── features/
-│       │   ├── editor/         budget history editing + raw-format paste parser
+│       │   ├── upload/         download the example, upload a CSV, show validation errors
 │       │   └── report/         daily report table
 │       └── lib/                money formatting, date handling
 └── docker-compose.yml
 ```
 
-## Money
+## The CSV
 
-Integer cents everywhere — in the domain, in the API payloads, and in the database as `INT`. Never
-`FLOAT`, and never `DECIMAL` doing arithmetic in SQL. `2 × budget` is then exact, comparisons are exact,
-and running totals cannot drift. Conversion to a decimal string happens once, at the display boundary.
+```csv
+date,time,budget
+2019-01-01,10:00,7
+2019-01-01,11:00,0
+2019-01-01,12:00,1
+2019-01-01,23:00,6
+2019-01-05,10:00,2
+```
+
+ISO dates in the files we control. The ambiguity resolved in FR-1 is a property of the exercise's own
+notation and there is no reason to inherit it — but the reader also accepts `MM.DD.YYYY`, so the
+exercise's dates can be used unchanged.
+
+Validation errors carry the line that caused them: a malformed time, a negative amount, a duplicate
+timestamp, a row outside the period. The reader reports every problem in one pass rather than failing on
+the first.
 
 ## API
 
-| Method | Path            | Purpose                                                                     |
-| ------ | --------------- | --------------------------------------------------------------------------- |
-| `POST` | `/api/simulate` | stateless: budget history and seed in, generated costs and daily report out |
+| Method | Path            | Purpose                                                                                                          |
+| ------ | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/api/sample`   | download the example CSV — the same file the tests use as a fixture, so the two cannot drift                     |
+| `POST` | `/api/simulate` | upload a CSV (`multipart/form-data`, optional `seed`); returns the generated costs, the daily report and the seed |
 
-`/api/simulate` is the endpoint that most directly answers the exercise: the algorithm can be exercised by
-the frontend, by curl, or by a reviewer, without any stored state.
+The workflow is: download the example, edit it in a spreadsheet, upload it. There is no in-app editing of
+budget changes — the exercise does not ask for it, and Excel is a better editor than anything we would
+build in the time. The seed comes back in the response so a run can be pinned and repeated.
+
+## Money
+
+Integer cents everywhere, in the domain and in the API payloads. Never floats. `2 × budget` is then exact,
+comparisons are exact, and running totals cannot drift. Conversion to a decimal string happens once, at
+the display boundary.
 
 ## Testing
 
-| Suite      | Covers                                                                                                                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit       | timeline construction, carry-over across boundaries, `budgetAt`, daily maxima, allowance arithmetic, the paste parser                                 |
-| Invariant  | INV-1 … INV-8 asserted across many seeds and randomly generated histories                                                                             |
-| Fixture    | the exercise's sample: allowances `31 / 20 / 31`, Budget column `7, 6, 6, 6, 2, 0, 0, 0`, and validation of the sample's own cost stream (AC-1, AC-2) |
-| Functional | the endpoint, including validation failures                                                                                                           |
+| Suite      | Covers                                                                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit       | timeline construction, carry-over across boundaries, `budgetAt`, daily maxima, allowance arithmetic, CSV parsing and its error reporting                   |
+| Invariant  | INV-1 … INV-8 asserted across many seeds and randomly generated histories                                                                                 |
+| Fixture    | `sample.csv`: allowances `31 / 20 / 31`, Budget column `7, 6, 6, 6, 2, 0, 0, 0`, and validation of the exercise's own cost stream (AC-1, AC-2)             |
+| Functional | both endpoints, including malformed CSV                                                                                                              |
 
 The invariant suite is the one that matters. A random algorithm cannot be tested by comparing output to a
 golden file; it is tested by asserting that properties hold whatever the seed produced — and, because the
@@ -89,5 +123,5 @@ seed is recorded, any failure is exactly reproducible.
 docker compose up
 ```
 
-Brings up MySQL, the API (php-fpm + nginx) and the Vite dev server, and runs migrations. No local PHP or
-Node installation required.
+Brings up the API (php-fpm + nginx) and the Vite dev server. No local PHP or Node installation
+required. `fixtures/sample.csv` is downloadable from the UI as a starting point.

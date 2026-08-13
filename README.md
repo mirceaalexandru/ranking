@@ -35,10 +35,13 @@ That reading, and every other decision the exercise forced, is recorded with its
 
 ## Stack
 
-PHP 8.3 · Symfony 7 · MySQL 8 · Doctrine · React · TypeScript · Vite · Docker
+PHP 8.3 · Symfony 7 · React · TypeScript · Vite · Docker
 
 The generation algorithm is framework-free plain PHP in `api/src/Domain`, unit-tested in isolation.
 Symfony provides HTTP, validation and serialization around it.
+
+The budget history is a CSV file you upload. The server is stateless — no database, nothing kept between
+requests. The exercise asks for nothing to be stored, and a run is reproducible from its history and seed.
 
 ## Running
 
@@ -46,4 +49,7 @@ Symfony provides HTTP, validation and serialization around it.
 docker compose up
 ```
 
-Brings up the database, API and frontend. No local PHP or Node installation required.
+Brings up the API and frontend; no local PHP or Node installation required.
+
+Download the example CSV from the UI, edit it in a spreadsheet, upload it. The example is the exercise's
+own budget history, so there is something to run immediately.

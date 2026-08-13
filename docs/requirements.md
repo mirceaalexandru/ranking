@@ -72,12 +72,38 @@ summary, as in the exercise's own output.
 daily rows, so a reader can see what the budget actually did during a day rather than only its daily
 maximum. *(Ref: [decision log #5](decision-log.md).)*
 
+## Input
+
+**FR-12 — CSV is the input format.** The budget history is supplied as CSV with columns
+`date, time, budget`. Dates are ISO `YYYY-MM-DD` in files the project owns; the reader also accepts the
+exercise's `MM.DD.YYYY` so its own notation can be used unchanged.
+
+**FR-13 — Validation reports every problem, with line numbers.** A malformed time, a negative amount, a
+duplicate timestamp or a row outside the period is reported against the line that caused it. The reader
+makes one pass and returns all errors, rather than failing on the first.
+
+**FR-14 — The server is stateless.** Nothing is stored between requests: no database, and no server-side
+working copy. A simulation takes the uploaded history and returns the result. The exercise asks for
+nothing to be stored, a run is reproducible from `(history, seed)`, and statelessness means two people can
+use the app at once without interfering.
+
+**FR-15 — Two endpoints.**
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| `GET` | `/api/sample` | download the example CSV — the same file the tests use as a fixture |
+| `POST` | `/api/simulate` | upload a CSV (`multipart/form-data`, optional `seed`); returns the generated costs, the daily report and the seed used |
+
+`POST /api/simulate` is the endpoint that answers the exercise: it is a pure function of its input.
+
 ## Application
 
-**FR-12 — Budget history editor.** The UI allows adding, editing and removing budget changes, and
-importing a history pasted in the format used by the exercise.
+**FR-16 — Download, edit, upload.** The UI offers the example CSV for download; the user edits it in
+whatever tool they prefer and uploads it. There is no in-app editing of budget changes — the exercise does
+not ask for it, and a spreadsheet is a better editor than anything we would build.
 
-**FR-13 — Run and display.** The UI submits a history, runs a simulation and renders the daily report.
+**FR-17 — Run and display.** Uploading a CSV runs the simulation and renders the daily report, the
+generated costs, and the monthly allowances. Validation failures are shown against their line numbers.
 
 ## Non-functional
 
@@ -85,13 +111,18 @@ importing a history pasted in the format used by the exercise.
 floating-point accumulation. Display formatting is the only place conversion happens.
 
 **NFR-2 — Framework-independent domain.** The generation algorithm and report builder are plain PHP with
-no Symfony or Doctrine dependency, unit-testable in isolation.
+no Symfony dependency, unit-testable in isolation.
 
 **NFR-3 — Strict typing.** PHP with `declare(strict_types=1)` throughout; TypeScript in strict mode with
 no `any`.
 
-**NFR-4 — One-command startup.** `docker compose up` brings up database, API and frontend with no local
-PHP or Node installation required.
+**NFR-4 — One-command startup.** `docker compose up` brings up the API and frontend with no local PHP or
+Node installation required.
+
+**NFR-5 — No shared state between requests.** The API keeps nothing in memory, in a session, or on disk
+between calls. This sidesteps the fact that PHP-FPM serves each request in a separate worker process — a
+server-side working copy would have needed a shared backing store to survive at all — and it makes
+`/api/simulate` a pure function, which is what makes the invariant suite meaningful.
 
 ---
 
