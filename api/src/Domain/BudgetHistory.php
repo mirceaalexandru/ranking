@@ -78,4 +78,32 @@ final readonly class BudgetHistory
     {
         return $this->changes[0] ?? null;
     }
+
+    public function last(): ?BudgetChange
+    {
+        return $this->changes[array_key_last($this->changes)] ?? null;
+    }
+
+    /**
+     * The range a report over this history should cover.
+     *
+     * It starts on the day of the first change — there is nothing to say about
+     * days before the campaign existed — and runs to the end of the month
+     * containing the last one, so the final month is reported whole rather than
+     * truncated wherever the user last happened to touch the budget.
+     */
+    public function coveringPeriod(): Period
+    {
+        $first = $this->first();
+        $last = $this->last();
+
+        if (null === $first || null === $last) {
+            throw new InvalidArgumentException('An empty history covers no period.');
+        }
+
+        return new Period(
+            $first->at,
+            $last->at->modify('last day of this month'),
+        );
+    }
 }
