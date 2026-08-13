@@ -22,6 +22,10 @@
         <testsuite name="unit">
             <directory>tests/Unit</directory>
         </testsuite>
+        <!-- Property-style sweeps across many seeds. -->
+        <testsuite name="invariant">
+            <directory>tests/Invariant</directory>
+        </testsuite>
         <!-- Boots the kernel and drives the HTTP layer. -->
         <testsuite name="functional">
             <directory>tests/Functional</directory>
