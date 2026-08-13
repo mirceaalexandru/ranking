@@ -55,9 +55,12 @@ apps/ranking/
 │   │   │   ├── SeededRandom.php           Randomizer wrapper
 │   │   │   └── DailyReportBuilder.php
 │   │   ├── Csv/
-│   │   │   └── BudgetHistoryReader.php    parse + validate, errors carry line numbers
-│   │   ├── Controller/         thin: deserialize → domain → serialize
-│   │   └── Dto/                request/response shapes, validated
+│   │   │   ├── BudgetHistoryReader.php    parse + validate, errors carry line numbers
+│   │   │   ├── CsvError.php
+│   │   │   └── ReadResult.php
+│   │   ├── Http/
+│   │   │   └── ReportPresenter.php        shapes a report for the wire
+│   │   └── Controller/         thin: deserialize → domain → serialize
 │   └── tests/
 │       ├── Unit/               domain and CSV parsing, no kernel
 │       ├── Invariant/          property-style, many seeds (INV-1 … INV-8)
