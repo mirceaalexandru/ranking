@@ -1,0 +1,22 @@
+# Tooling — not part of the deliverable
+_bmad/
+_bmad-output/
+.claude/
+
+# PHP
+/api/vendor/
+/api/var/
+/api/.env.local
+/api/.env.*.local
+/api/.phpunit.result.cache
+
+# Node
+/web/node_modules/
+/web/dist/
+/web/.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
