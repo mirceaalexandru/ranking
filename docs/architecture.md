@@ -2,6 +2,9 @@
 
 Satisfies [requirements.md](requirements.md) NFR-1 – NFR-5.
 
+> **This is the intended design, not a description of the current tree.** It sets out where things belong
+> once the application is complete; components arrive as the work reaches them.
+
 ---
 
 ## Stack
