@@ -12,6 +12,7 @@ Satisfies [requirements.md](requirements.md) NFR-1 – NFR-5.
 | Domain   | Framework-free plain PHP, unit-tested directly with PHPUnit                             |
 | Input    | CSV, uploaded per run — the server keeps nothing                                        |
 | Frontend | React + TypeScript (strict), Vite                                                       |
+| Serving  | FrankenPHP — one process, no separate web server or FastCGI layer                        |
 | Infra    | `docker compose` covering the whole stack                                               |
 
 **No database, and no state at all.** The exercise takes a budget history as input and produces a report;
@@ -123,5 +124,22 @@ seed is recorded, any failure is exactly reproducible.
 docker compose up
 ```
 
-Brings up the API (php-fpm + nginx) and the Vite dev server. No local PHP or Node installation
-required. `fixtures/sample.csv` is downloadable from the UI as a starting point.
+Brings up two services: the API and the Vite dev server. The frontend is on `http://localhost:5174` and
+the API on `http://localhost:8081`; both host ports are overridable via `WEB_PORT` and `API_PORT`, since
+5173 and 8080 are commonly taken by something else. Vite proxies `/api` to the API service, so the browser
+only ever talks to one origin and there is no CORS configuration to get wrong.
+
+**Why not php-fpm behind nginx.** php-fpm does not speak HTTP, so choosing it forces a second service and
+a FastCGI configuration in front. FrankenPHP serves `/app/public` itself, which removes a container, a
+config file and a class of misconfiguration — for an application with two endpoints and no static assets,
+nginx would be doing nothing that is needed here.
+
+## Quality gates
+
+| | |
+| --- | --- |
+| `composer check` | PHP-CS-Fixer, PHPStan at **level max with no baseline**, PHPUnit |
+| `npm run check` | `tsc --noEmit`, ESLint (strict type-checked, `no-explicit-any` as an error), Prettier, Vitest |
+
+Both are green from the first commit. Retrofitting PHPStan at max onto a finished codebase is a miserable
+afternoon; starting there costs nothing.

@@ -35,7 +35,7 @@ That reading, and every other decision the exercise forced, is recorded with its
 
 ## Stack
 
-PHP 8.3 · Symfony 7 · React · TypeScript · Vite · Docker
+PHP 8.3 · Symfony 7 · FrankenPHP · React · TypeScript · Vite · Docker
 
 The generation algorithm is framework-free plain PHP in `api/src/Domain`, unit-tested in isolation.
 Symfony provides HTTP, validation and serialization around it.
@@ -51,5 +51,17 @@ docker compose up
 
 Brings up the API and frontend; no local PHP or Node installation required.
 
-Download the example CSV from the UI, edit it in a spreadsheet, upload it. The example is the exercise's
-own budget history, so there is something to run immediately.
+| | |
+| --- | --- |
+| Frontend | http://localhost:5174 |
+| API | http://localhost:8081/api/health |
+
+Both host ports are overridable — `WEB_PORT=5200 API_PORT=8090 docker compose up` — since 5173 and 8080
+are commonly already taken.
+
+### Working on it directly
+
+```bash
+cd api && composer check     # php-cs-fixer, PHPStan at max, PHPUnit
+cd web && npm run check      # tsc, ESLint, Prettier, Vitest
+```
