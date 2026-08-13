@@ -62,13 +62,14 @@ are commonly already taken.
 ### Working on it directly
 
 ```bash
-make check     # every gate, the same commands CI runs
+make check     # every gate
 make test      # just the test suites
 make up        # start the stack and wait for health
 make smoke     # verify the running stack answers
 ```
 
-`make help` lists the rest.
+`make help` lists the rest. **CI invokes these same targets**, so the Makefile is the single definition of
+what "checked" means — what runs in the pipeline and what you run locally cannot drift apart.
 
 ## Continuous integration
 
@@ -76,9 +77,9 @@ Every push and pull request runs three jobs:
 
 | Job | Checks |
 | --- | ------ |
-| **API** | `composer validate --strict`, formatting, PHPStan at level max, service-container lint, YAML lint, PHPUnit, `composer audit` |
-| **Web** | `npm ci` against the committed lock, `tsc --noEmit`, ESLint, Prettier, Vitest |
-| **Docker** | builds both images, starts the stack, waits for health, and curls the API, the frontend and the proxied endpoint |
+| **API** | `make validate-api lint-api test-api audit-api` — manifest/lock agreement, formatting, PHPStan at level max, service-container lint, YAML lint, PHPUnit, `composer audit` |
+| **Web** | `make lint-web test-web` — `npm ci` against the committed lock, `tsc --noEmit`, ESLint, Prettier, Vitest |
+| **Docker** | `make build up smoke` — builds both images, starts the stack, waits for health, and curls the API, the frontend and the proxied endpoint |
 
 The Docker job exists because a green test suite says nothing about whether `docker compose up` — the
 thing a reader will actually do — still works.
