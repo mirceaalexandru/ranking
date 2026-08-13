@@ -1,25 +1,36 @@
 version: 2
 
-# Grouped so a week's patches arrive as one pull request per ecosystem
-# rather than one per package.
+# Routine updates are grouped so a week's patches arrive as one pull request per
+# ecosystem. Majors are deliberately NOT grouped: one incompatible major would
+# otherwise block every other update in the same PR, and the group cannot be
+# partially merged.
 updates:
     - package-ecosystem: composer
       directory: /api
       schedule:
           interval: weekly
       groups:
-          php:
+          php-routine:
               patterns: ['*']
+              update-types: [minor, patch]
 
     - package-ecosystem: npm
       directory: /web
       schedule:
           interval: weekly
       groups:
-          javascript:
+          javascript-routine:
               patterns: ['*']
+              update-types: [minor, patch]
+      ignore:
+          # typescript-eslint 8 declares a peer range of <6.1.0; TypeScript 7
+          # cannot be installed alongside it. Revisit when typescript-eslint
+          # ships support, then remove this entry.
+          - dependency-name: typescript
+            update-types: [version-update:semver-major]
 
-    # Actions pinned by major tag drift silently; this is the one that matters most.
+    # Action majors are usually a version bump and nothing else, so grouping
+    # them all is safe here.
     - package-ecosystem: github-actions
       directory: /
       schedule:
