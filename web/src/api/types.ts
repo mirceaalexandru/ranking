@@ -23,8 +23,18 @@ export interface MonthSummary {
     percentUsed: number
 }
 
+export const ALGORITHMS = ['paced', 'greedy'] as const
+export type AlgorithmValue = (typeof ALGORITHMS)[number]
+
+export interface AlgorithmInfo {
+    value: AlgorithmValue
+    label: string
+    description: string
+}
+
 export interface Simulation {
     seed: number
+    algorithm: AlgorithmInfo
     period: { start: string; end: string; days: number }
     months: MonthSummary[]
     days: DayRow[]

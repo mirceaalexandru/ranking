@@ -8,6 +8,7 @@ use App\Domain\BudgetHistory;
 use App\Domain\BudgetTimeline;
 use App\Domain\CostEvent;
 use App\Domain\CostGenerator;
+use App\Domain\Generation\Algorithm;
 use App\Domain\Money;
 use App\Domain\MonthlyAllowance;
 use App\Domain\Period;
@@ -23,13 +24,18 @@ final class CostGeneratorTest extends TestCase
      *
      * @return list<CostEvent>
      */
-    private function generateWith(array $changes, string $from, string $to, int $seed): array
-    {
+    private function generateWith(
+        array $changes,
+        string $from,
+        string $to,
+        int $seed,
+        Algorithm $algorithm = Algorithm::Paced,
+    ): array {
         $history = new BudgetHistory($changes);
         $timeline = new BudgetTimeline($history, new Period(new DateTimeImmutable($from), new DateTimeImmutable($to)));
 
         return (new CostGenerator($history, $timeline, new MonthlyAllowance($history, $timeline)))
-            ->generate(new SeededRandom($seed));
+            ->generate(new SeededRandom($seed), $algorithm);
     }
 
     public function testAPausedCampaignGeneratesNothingDespiteTrying(): void
@@ -107,6 +113,7 @@ final class CostGeneratorTest extends TestCase
                 '2019-01-01',
                 '2019-01-31',
                 $seed,
+                Algorithm::Greedy,
             );
 
             $total = array_reduce(
@@ -163,7 +170,7 @@ final class CostGeneratorTest extends TestCase
         $exceeded = 0;
         for ($seed = 1; $seed <= 25; ++$seed) {
             $total = array_reduce(
-                $generator->generate(new SeededRandom($seed)),
+                $generator->generate(new SeededRandom($seed), Algorithm::Greedy),
                 static fn (Money $carry, CostEvent $event): Money => $carry->plus($event->amount),
                 Money::zero(),
             );

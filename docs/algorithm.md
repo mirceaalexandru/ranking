@@ -1,4 +1,4 @@
-# The algorithm
+# The algorithms
 
 Implements [requirements.md](requirements.md), under the readings recorded in
 [development-log.md](development-log.md).
@@ -6,6 +6,10 @@ Implements [requirements.md](requirements.md), under the readings recorded in
 The simulation is a **single chronological sweep**. There is no backtracking and no reject-and-retry loop:
 each cost is drawn from the headroom that remains at that instant, so both caps hold by construction
 rather than being checked afterwards.
+
+Two algorithms decide *how much* to spend — [greedy](#greedy) and [paced](#paced) — over a shared engine
+that decides how much they *may*. Which one produced a run is part of that run's identity: the same file
+and seed under a different algorithm is a different run, not a variation of the same one.
 
 The governing principle is that **generation only ever sees the past**. At the moment a cost is initiated,
 the algorithm knows the budget history up to that instant and nothing beyond it. Both rules are evaluated
@@ -22,16 +26,15 @@ against that knowledge, and neither is applied retroactively.
 2. Sweep the period chronologically. For each day:
       n = random integer in [1, 10]
       moments = n random instants within the day, sorted ascending
-      for each moment t:
+      hand the day to the chosen algorithm, which for each moment t may ask
+      to spend some amount. The engine then decides what it may have:
           B         = budget in effect at t
           allowance = allowance_at(t)                        ← see below
           room      = min( 2×B − spent_today,
                            allowance − spent_month )
-          if room <= 0:
-              no cost is generated at t
-          else:
-              cost = round( uniform(0, room), 2 )
-              spent_today += cost ;  spent_month += cost
+          amount    = min( what was asked for, room )
+          if amount <= 0:  nothing is generated at t
+          else:            record it; spent_today += amount; spent_month += amount
 ```
 
 ## The monthly allowance is a moving quantity
@@ -108,15 +111,123 @@ The exercise says "at most 10 times per day", which permits zero. Drawing from `
 *because the rules refused it* — not because the generator declined to try. It makes `01.06.2019: 0` in
 the sample an outcome rather than an absence.
 
-## Choosing the cost amount
+## The seam: wanting versus being allowed
 
-The amount is drawn uniformly from the remaining headroom:
+An algorithm decides how much a campaign **wants** to spend. What it **may** spend is decided in one
+place, `DaySession::spend()`, which clamps every request to the room both caps leave and refuses anything
+that leaves none.
+
+That division is deliberate. It means a badly written algorithm produces poor *spending patterns*, never
+illegal *runs* — the invariants are structural rather than something each implementation has to remember.
+A test asserts this directly, using an algorithm that asks for `PHP_INT_MAX` at every moment and checking
+the daily cap still holds on all ninety days.
+
+Each algorithm implements a single method and can be read end to end without reference to the other:
+
+```php
+interface CostAlgorithm
+{
+    public function spendDay(DaySession $day, SeededRandom $random): void;
+}
+```
+
+The engine owns the shape of the simulation — the period, how many attempts a day makes, when they fall —
+and the guarantee. The algorithms own only the decision.
+
+---
+
+## Greedy
+
+Spend whatever the rules currently permit, drawn uniformly from the headroom. That is the whole algorithm:
 
 ```
-cost = round( uniform(0, room), 2 )
+for each moment t in the day:
+    room = what both caps still allow at t
+    if room > 0:
+        want uniform(0.01, room)
 ```
 
-Amounts rounding to zero cents are discarded, so every recorded cost is strictly positive.
+This is the literal reading of "generate costs in a random way", and it produces a consequence worth
+seeing rather than hiding.
+
+**The two caps are asymmetric.** The daily rule permits `2 × B`; the month permits only `Σ B` — one budget
+per day, not two. A day drawing freely from its headroom takes roughly `2 × B` against a monthly allowance
+of about `30 × B`:
+
+```
+30 days at budget B      allowance = 30B      daily cap = 2B
+spending ≈2B/day    →    allowance gone on day 15; days 16–30 generate nothing
+```
+
+Measured over twenty seeds on the example history, greedy leaves an average of **6.2 trailing days** with
+a live budget and no costs, and spends **83%** of each month before the 15th. Every month finishes above
+its closing allowance.
+
+Greedy is kept, unchanged, because that behaviour is what the rules as written produce. It is also the
+contrast that makes the second algorithm's reason for existing visible rather than merely asserted.
+
+---
+
+## Paced
+
+Spread each month's allowance across its days, in proportion to each day's budget.
+
+The starting point is that **the 2× is overdelivery headroom for a good day, not a spending target**. That
+is how the real product behaves: a campaign may overspend a given day while the monthly charge stays
+within the daily budget × ~30.4. Costs should therefore average to the budget and vary up to twice it.
+
+Each day is given a target — its share of what the month has left, weighted by its own budget:
+
+```
+share = remaining allowance × maxBudget(today) / Σ maxBudget(today … end of month)
+```
+
+**Worked through, at a constant budget of 10 over 31 days.**
+
+Day 1 — remaining allowance 310, today's budget 10, remaining weight 31 × 10 = 310:
+
+```
+share = 310 × 10 / 310 = 10.00        ← exactly the day's own budget
+```
+
+Say jitter takes it to 14 and the day spends that. Day 2 then has 296 left over a weight of 300:
+
+```
+share = 296 × 10 / 300 =  9.87        ← every later day shrinks slightly
+```
+
+Had day 1 spent only 5, day 2's share would have risen instead. **It self-corrects continuously**, so an
+overspend is absorbed gradually rather than discovered as a wall halfway through the month.
+
+**The weighting matters.** A day at budget 6 beside a day at budget 2 receives three times the share, not
+an equal slice — which would starve the expensive day and overfeed the cheap one.
+
+**Jitter is not decoration.** The share is multiplied by a random factor between 0.55 and 1.55, then
+capped at `2 × B` so it can never aim above what rule 1 allows. Without it every day lands exactly on its
+budget, the 2× ceiling is never approached, and the daily cap becomes a rule that never visibly binds.
+With too much, the month front-loads again. The current range spends about **44% of days above one
+budget** while leaving no empty tail.
+
+Within the day, the target is divided across the remaining attempts, each drawn from
+`uniform(0.01, 2 × even share)` so a day's costs differ in size rather than arriving as *n* identical
+amounts. Once the day has spent its target, its remaining attempts pass without generating anything.
+
+---
+
+## The two compared
+
+Twenty seeds, over the example history:
+
+| | Greedy | Paced |
+| --- | --- | --- |
+| Trailing days with a live budget and no costs | 6.2 (max 9) | **0** |
+| Share of each month spent before the 15th | 83% | **52%** |
+| Days spending above one budget — the 2× headroom in use | 56% | 44% |
+| Months finishing above their closing allowance | all of them | **none** |
+
+Both satisfy every invariant on every seed. They differ only in the shape of the month, which is the point:
+the rules permit both, and choosing between them is a judgement about what a campaign is supposed to look
+like rather than about what is legal.
 
 ## Three quantities, not one
 
@@ -160,12 +271,15 @@ asserts invariants across many seeds, and any failure is reproducible from the s
 
 ## Money
 
-All arithmetic is in integer cents. `2 × budget` is exact, comparisons are exact, and accumulated totals
-never drift. Conversion to decimal happens only at the serialization boundary.
+All arithmetic is in integer cents — including the draws, which pick a whole number of cents rather than
+rounding a decimal. `2 × budget` is exact, comparisons are exact, and totals accumulated across hundreds
+of events never drift. Conversion to a decimal string happens only at the serialization boundary, and
+money crosses the wire as a string: JSON numbers are doubles, and sending one would hand the problem
+straight back.
 
 ## Complexity
 
-The period is roughly 90 days with at most 10 attempts each. Building the timeline is `O(changes)`, and
-each attempt recomputes the allowance in `O(days in month)` — at most 31 additions. The whole sweep is a
-few tens of thousands of operations. None of it needs optimising, and the code should stay obvious rather
-than clever.
+The period is roughly 90 days with at most 10 attempts each. Building the timeline is `O(changes)`; each
+attempt recomputes the allowance in `O(days in month)`, at most 31 additions; and pacing sums the
+remaining days' maxima once per day, again at most 31. The whole sweep is a few tens of thousands of
+operations. None of it needs optimising, and the code should stay obvious rather than clever.

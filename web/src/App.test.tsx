@@ -20,6 +20,11 @@ afterEach(() => {
 function aSimulation(overrides: Partial<Simulation> = {}): Simulation {
     return {
         seed: 4242,
+        algorithm: {
+            value: 'paced',
+            label: 'Paced',
+            description: "Spreads each month's allowance across its days.",
+        },
         period: { start: '2019-01-01', end: '2019-03-31', days: 90 },
         months: [
             {
@@ -132,7 +137,7 @@ describe('App', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /run simulation/i }))
         await waitFor(() => {
-            expect(simulateMock).toHaveBeenLastCalledWith(expect.any(File), '4242')
+            expect(simulateMock).toHaveBeenLastCalledWith(expect.any(File), '4242', 'paced')
         })
     })
 
@@ -167,6 +172,36 @@ describe('App', () => {
             ['09:00:00', 'Budget set', '5.00'],
             ['09:14:22', 'Cost', '1.23'],
         ])
+    })
+
+    it('runs paced by default and can be switched to greedy', async () => {
+        simulateMock.mockResolvedValue(aSimulation())
+        render(<App />)
+
+        upload()
+        expect(screen.getByLabelText(/algorithm/i)).toHaveValue('paced')
+
+        fireEvent.change(screen.getByLabelText(/algorithm/i), { target: { value: 'greedy' } })
+        expect(screen.getByText(/empties around its halfway point/i)).toBeInTheDocument()
+
+        fireEvent.click(screen.getByRole('button', { name: /run simulation/i }))
+
+        await waitFor(() => {
+            expect(simulateMock).toHaveBeenLastCalledWith(expect.any(File), '', 'greedy')
+        })
+    })
+
+    it('names the algorithm that produced the run', async () => {
+        simulateMock.mockResolvedValue(aSimulation())
+        render(<App />)
+
+        upload()
+        fireEvent.click(screen.getByRole('button', { name: /run simulation/i }))
+
+        await waitFor(() => {
+            expect(screen.getByRole('table')).toBeInTheDocument()
+        })
+        expect(screen.getByText(/Paced · seed 4242/)).toBeInTheDocument()
     })
 
     it('shows the allowance alongside the spend, flagging a month that went over', async () => {

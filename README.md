@@ -20,7 +20,7 @@ budget**. The task is to generate those costs and produce a daily history of bud
 | [docs/exercise.md](docs/exercise.md)         | The exercise as given, transcribed verbatim, with its worked example.                                                                                                                                                        |
 | [docs/development-log.md](docs/development-log.md) | One line per working session: what was decided, and what was later changed. |
 | [docs/requirements.md](docs/requirements.md) | Functional and non-functional requirements, run invariants, acceptance criteria.                                                                                                                                             |
-| [docs/algorithm.md](docs/algorithm.md)       | How costs are generated: a single chronological sweep, one blocking rule, seeded randomness.                                                                                                                                 |
+| [docs/algorithm.md](docs/algorithm.md)       | How costs are generated: a single chronological sweep, one blocking rule, seeded randomness, and the two selectable algorithms — greedy and paced.                                                                          |
 | [docs/architecture.md](docs/architecture.md) | Stack, project layout, API surface, testing strategy.                                                                                                                                                                        |
 
 ## The interesting part

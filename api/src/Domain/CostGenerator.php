@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Domain;
 
+use App\Domain\Generation\Algorithm;
+use App\Domain\Generation\DaySession;
+use DateInterval;
 use DateTimeImmutable;
 
 /**
- * Generates the campaign's costs: a single chronological sweep over the period,
- * with both caps satisfied by construction rather than checked afterwards.
+ * Sweeps the period day by day and hands each one to an algorithm to spend.
  *
- * Each cost is drawn from the headroom that remains at that instant, so there is
- * no backtracking and no reject-and-retry loop.
+ * This class owns the shape of the simulation — the period, how many attempts a
+ * day makes and when — and the guarantee that neither cap can be breached, which
+ * lives in DaySession. It owns none of the spending decisions; those are the
+ * algorithm's, and each algorithm is a complete, independent statement of them.
  */
 final readonly class CostGenerator
 {
@@ -28,8 +32,10 @@ final readonly class CostGenerator
     /**
      * @return list<CostEvent> in chronological order
      */
-    public function generate(SeededRandom $random): array
+    public function generate(SeededRandom $random, Algorithm $algorithm = Algorithm::Paced): array
     {
+        $implementation = $algorithm->implementation();
+
         $events = [];
         $spentThisMonth = Money::zero();
         $month = null;
@@ -40,53 +46,66 @@ final readonly class CostGenerator
                 $spentThisMonth = Money::zero();
             }
 
-            $spentToday = Money::zero();
-
             // At least one attempt, never zero: a day that produces nothing then
             // produces nothing *because the rules refused it*, rather than
             // because the generator declined to try.
             $attempts = $random->intBetween(self::MIN_ATTEMPTS_PER_DAY, self::MAX_ATTEMPTS_PER_DAY);
 
-            foreach ($random->distinctSecondsOfDay($attempts) as $second) {
-                $moment = $day->setTime(0, 0)->modify("+{$second} seconds");
+            $session = new DaySession(
+                moments: $this->momentsIn($day, $attempts, $random),
+                history: $this->history,
+                allowance: $this->allowance,
+                day: $day,
+                maxBudget: $this->timeline->maxBudget($day),
+                remainingWeight: $this->weightOfRestOfMonth($day),
+                spentThisMonth: $spentThisMonth,
+            );
 
-                $room = $this->headroomAt($moment, $spentToday, $spentThisMonth);
-                if (!$room->isPositive()) {
-                    // Paused, over the daily cap, or the month is exhausted.
-                    // One expression covers all three; there is nothing to
-                    // special-case.
-                    continue;
-                }
+            $implementation->spendDay($session, $random);
 
-                $amount = Money::fromCents($random->intBetween(1, $room->cents));
-
-                $events[] = new CostEvent($moment, $amount);
-                $spentToday = $spentToday->plus($amount);
-                $spentThisMonth = $spentThisMonth->plus($amount);
+            foreach ($session->events() as $event) {
+                $events[] = $event;
             }
+
+            $spentThisMonth = $session->spentThisMonth();
         }
 
         return $events;
     }
 
     /**
-     * What may still be spent at this instant, under both rules at once.
+     * Moments are drawn across the whole 24 hours, including intervals where the
+     * budget is zero. An attempt landing in a paused interval is refused for the
+     * same reason as one landing on an already-overspent day.
      *
-     * A paused campaign has a budget of zero, so the daily cap is zero and the
-     * headroom is not positive — the same outcome, by the same expression, as a
-     * day that has already spent its allowance. Time before the first budget
-     * change behaves identically.
+     * @return list<DateTimeImmutable>
      */
-    private function headroomAt(
-        DateTimeImmutable $moment,
-        Money $spentToday,
-        Money $spentThisMonth,
-    ): Money {
-        $budget = $this->history->budgetAt($moment) ?? Money::zero();
+    private function momentsIn(DateTimeImmutable $day, int $attempts, SeededRandom $random): array
+    {
+        $midnight = $day->setTime(0, 0);
 
-        $underDailyCap = $budget->times(2)->minus($spentToday);
-        $underMonthlyCap = $this->allowance->at($moment)->minus($spentThisMonth);
+        return array_map(
+            static fn (int $second): DateTimeImmutable => $midnight->modify("+{$second} seconds"),
+            $random->distinctSecondsOfDay($attempts),
+        );
+    }
 
-        return Money::min($underDailyCap, $underMonthlyCap);
+    /**
+     * The sum of the daily maxima from this day to the end of its month — the
+     * denominator a pacing algorithm divides the remaining allowance by.
+     */
+    private function weightOfRestOfMonth(DateTimeImmutable $day): Money
+    {
+        $total = Money::zero();
+        $cursor = $day->setTime(0, 0);
+        $monthEnd = $day->modify('last day of this month')->setTime(0, 0);
+        $oneDay = new DateInterval('P1D');
+
+        while ($cursor <= $monthEnd) {
+            $total = $total->plus($this->timeline->maxBudget($cursor));
+            $cursor = $cursor->add($oneDay);
+        }
+
+        return $total;
     }
 }

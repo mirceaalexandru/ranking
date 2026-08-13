@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain;
 
+use App\Domain\Generation\Algorithm;
+
 /**
  * Wires the pieces together: a history and a seed in, a report out.
  *
@@ -12,12 +14,16 @@ namespace App\Domain;
  */
 final readonly class Simulator
 {
-    public function run(BudgetHistory $history, Period $period, SeededRandom $random): DailyReport
-    {
+    public function run(
+        BudgetHistory $history,
+        Period $period,
+        SeededRandom $random,
+        Algorithm $algorithm = Algorithm::Paced,
+    ): DailyReport {
         $timeline = new BudgetTimeline($history, $period);
         $allowance = new MonthlyAllowance($history, $timeline);
 
-        $events = (new CostGenerator($history, $timeline, $allowance))->generate($random);
+        $events = (new CostGenerator($history, $timeline, $allowance))->generate($random, $algorithm);
 
         return (new DailyReportBuilder($history, $timeline, $allowance))->build($events);
     }

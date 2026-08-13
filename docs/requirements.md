@@ -25,6 +25,12 @@ cap is zero and no costs can be generated.
 **FR-4 — Cost generation.** For each day in the period the system makes between **1 and 10** attempts, at
 random instants drawn uniformly across the day and processed in chronological order.
 
+**FR-4a — Two algorithms.** How much to spend at each attempt is decided by a selectable algorithm:
+**greedy**, which spends whatever the rules permit, and **paced**, which spreads a month's allowance
+across its days in proportion to each day's budget. How much it *may* spend is decided by the engine, so
+neither can breach either cap. The algorithm is part of a run's identity alongside the history and the
+seed. *(Ref: [algorithm.md](algorithm.md).)*
+
 **FR-5 — Daily cap (rule 1).** At the instant a cost is generated,
 `spent_today + cost <= 2 × budget_in_effect_at_that_instant`. The cap is re-evaluated at every attempt and
 never retroactively invalidates costs already generated.
@@ -47,8 +53,9 @@ remains in the allowance for the rest of the day once reached.
 is recorded for that instant. A paused campaign and an exhausted budget are refused by the same rule, not
 by special cases.
 
-**FR-8 — Reproducibility.** A run is fully determined by its `(budget history, seed)` pair. Re-running with
-the same pair produces identical output.
+**FR-8 — Reproducibility.** A run is fully determined by its `(budget history, seed, algorithm)` triple.
+Re-running with the same triple produces identical output; changing any one of them produces a different
+run.
 
 ## Reporting
 
@@ -147,7 +154,10 @@ Neither rule is applied retroactively; costs are never refunded.
 
 **INV-6** — No cost event exists at an instant where the effective budget is zero or undefined.
 
-**INV-7** — The same `(history, seed)` produces an identical result.
+**INV-7** — The same `(history, seed, algorithm)` produces an identical result.
+
+**INV-9** — Every invariant above holds for **every** algorithm, and holds even for an algorithm that asks
+to spend more than the rules permit: the clamp is in the engine, not in the algorithms.
 
 **INV-8** — The report's Costs column for a day equals the sum of that day's cost events.
 

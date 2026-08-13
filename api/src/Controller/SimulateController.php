@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Csv\BudgetHistoryReader;
 use App\Csv\CsvError;
+use App\Domain\Generation\Algorithm;
 use App\Domain\SeededRandom;
 use App\Domain\Simulator;
 use App\Http\ReportPresenter;
@@ -69,6 +70,14 @@ final readonly class SimulateController
             return $this->problem('The seed must be a non-negative integer.', Response::HTTP_BAD_REQUEST);
         }
 
+        $algorithm = $this->algorithmFrom($request);
+        if (null === $algorithm) {
+            return $this->problem(
+                sprintf('The algorithm must be one of: %s.', implode(', ', array_column(Algorithm::cases(), 'value'))),
+                Response::HTTP_BAD_REQUEST,
+            );
+        }
+
         $result = $this->reader->read((string) file_get_contents($file->getPathname()));
 
         if (!$result->isSuccessful()) {
@@ -80,9 +89,25 @@ final readonly class SimulateController
 
         $history = $result->history();
         $period = $history->coveringPeriod();
-        $report = $this->simulator->run($history, $period, new SeededRandom($seed));
+        $report = $this->simulator->run($history, $period, new SeededRandom($seed), $algorithm);
 
-        return new JsonResponse($this->presenter->present($report, $period, $seed));
+        return new JsonResponse($this->presenter->present($report, $period, $seed, $algorithm));
+    }
+
+    /**
+     * Paced by default: greedy is faithful to the rules but empties a month
+     * around its halfway point, which is worth being able to see rather than
+     * being what someone sees first.
+     */
+    private function algorithmFrom(Request $request): ?Algorithm
+    {
+        $raw = $request->request->get('algorithm');
+
+        if (null === $raw || '' === $raw) {
+            return Algorithm::Paced;
+        }
+
+        return is_string($raw) ? Algorithm::tryFrom($raw) : null;
     }
 
     /**

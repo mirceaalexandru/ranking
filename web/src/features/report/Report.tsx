@@ -21,7 +21,10 @@ export function Report({ simulation }: { simulation: Simulation }): React.JSX.El
 
             <section className="panel">
                 <h2>
-                    Daily history <span className="muted">· seed {simulation.seed}</span>
+                    Daily history{' '}
+                    <span className="muted">
+                        · {simulation.algorithm.label} · seed {simulation.seed}
+                    </span>
                 </h2>
                 <table className="report">
                     <thead>
