@@ -19,9 +19,19 @@ updates:
       schedule:
           interval: weekly
       groups:
+          # Routine updates: one pull request a week for everything harmless.
           javascript-routine:
               patterns: ['*']
               update-types: [minor, patch]
+          # Toolchains whose packages only work in lockstep. Grouped with no
+          # update-types restriction, so their majors move together: bumping
+          # vite without @vitejs/plugin-react, or @eslint/js without eslint,
+          # produces a peer conflict that cannot be resolved in either pull
+          # request alone.
+          vite:
+              patterns: ['vite', '@vitejs/*', 'vitest', '@vitest/*']
+          eslint:
+              patterns: ['eslint', '@eslint/*', 'typescript-eslint', 'eslint-plugin-*']
       ignore:
           # typescript-eslint 8 declares a peer range of <6.1.0; TypeScript 7
           # cannot be installed alongside it. Revisit when typescript-eslint
