@@ -1,4 +1,4 @@
-import type { Simulation, ValidationError } from './types'
+import type { AlgorithmValue, Simulation, ValidationError } from './types'
 
 export class ApiError extends Error {
     constructor(message: string, options?: ErrorOptions) {
@@ -17,10 +17,15 @@ export class InvalidCsv extends Error {
 
 export const sampleUrl = '/api/sample'
 
-export async function simulate(file: File, seed?: string): Promise<Simulation> {
+export async function simulate(
+    file: File,
+    seed: string,
+    algorithm: AlgorithmValue,
+): Promise<Simulation> {
     const body = new FormData()
     body.append('file', file)
-    if (seed !== undefined && seed !== '') {
+    body.append('algorithm', algorithm)
+    if (seed !== '') {
         body.append('seed', seed)
     }
 

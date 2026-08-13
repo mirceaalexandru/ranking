@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { ApiError, InvalidCsv, simulate } from './api/client'
-import type { Simulation, ValidationError } from './api/types'
+import type { AlgorithmValue, Simulation, ValidationError } from './api/types'
 import { Problems } from './features/report/Problems'
 import { Report } from './features/report/Report'
 import { UploadPanel } from './features/upload/UploadPanel'
@@ -17,10 +17,10 @@ export function App(): React.JSX.Element {
     const [state, setState] = useState<State>({ status: 'idle' })
     const [lastSeed, setLastSeed] = useState<number | null>(null)
 
-    const run = (file: File, seed: string): void => {
+    const run = (file: File, seed: string, algorithm: AlgorithmValue): void => {
         setState({ status: 'running' })
 
-        simulate(file, seed)
+        simulate(file, seed, algorithm)
             .then((simulation) => {
                 setLastSeed(simulation.seed)
                 setState({ status: 'done', simulation })

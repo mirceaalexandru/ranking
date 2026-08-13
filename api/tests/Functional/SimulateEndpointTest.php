@@ -4,22 +4,35 @@ declare(strict_types=1);
 
 namespace App\Tests\Functional;
 
+use App\Domain\Generation\Algorithm;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 final class SimulateEndpointTest extends WebTestCase
 {
-    private function upload(KernelBrowser $client, string $csv, ?string $seed = '1234'): void
-    {
+    private function upload(
+        KernelBrowser $client,
+        string $csv,
+        ?string $seed = '1234',
+        ?string $algorithm = null,
+    ): void {
         $path = tempnam(sys_get_temp_dir(), 'csv');
         self::assertIsString($path);
         file_put_contents($path, $csv);
 
+        $parameters = [];
+        if (null !== $seed) {
+            $parameters['seed'] = $seed;
+        }
+        if (null !== $algorithm) {
+            $parameters['algorithm'] = $algorithm;
+        }
+
         $client->request(
             'POST',
             '/api/simulate',
-            null === $seed ? [] : ['seed' => $seed],
+            $parameters,
             ['file' => new UploadedFile($path, 'history.csv', 'text/csv', null, true)],
         );
     }
@@ -147,6 +160,55 @@ final class SimulateEndpointTest extends WebTestCase
         self::assertIsArray($sample['period']);
         self::assertSame('2019-05-01', $may['period']['start']);
         self::assertSame('2019-01-01', $sample['period']['start']);
+    }
+
+    public function testItRunsPacedByDefaultAndReportsWhichAlgorithmWasUsed(): void
+    {
+        $client = static::createClient();
+        $this->upload($client, $this->sampleCsv());
+
+        self::assertResponseIsSuccessful();
+        $body = $this->decode($client);
+
+        self::assertIsArray($body['algorithm']);
+        self::assertSame('paced', $body['algorithm']['value']);
+    }
+
+    public function testTheAlgorithmIsPartOfARunsIdentity(): void
+    {
+        $client = static::createClient();
+
+        $this->upload($client, $this->sampleCsv(), '55', 'paced');
+        $paced = (string) $client->getResponse()->getContent();
+
+        $this->upload($client, $this->sampleCsv(), '55', 'greedy');
+        $greedy = (string) $client->getResponse()->getContent();
+
+        // Same file, same seed, different algorithm: a different run, not a
+        // variation of the same one.
+        self::assertNotSame($paced, $greedy);
+    }
+
+    public function testEveryAlgorithmTheDomainOffersIsAccepted(): void
+    {
+        $client = static::createClient();
+
+        foreach (Algorithm::cases() as $algorithm) {
+            $this->upload($client, $this->sampleCsv(), '1', $algorithm->value);
+
+            self::assertResponseIsSuccessful("{$algorithm->value} should be accepted");
+            $body = $this->decode($client);
+            self::assertIsArray($body['algorithm']);
+            self::assertSame($algorithm->value, $body['algorithm']['value']);
+        }
+    }
+
+    public function testAnUnknownAlgorithmIsRejected(): void
+    {
+        $client = static::createClient();
+        $this->upload($client, $this->sampleCsv(), '1', 'clairvoyant');
+
+        self::assertResponseStatusCodeSame(400);
     }
 
     public function testAMalformedFileIsRejectedWithEveryProblemAndItsLine(): void

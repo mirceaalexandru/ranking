@@ -8,6 +8,7 @@ use App\Domain\BudgetChange;
 use App\Domain\CostEvent;
 use App\Domain\DailyReport;
 use App\Domain\DailyReportRow;
+use App\Domain\Generation\Algorithm;
 use App\Domain\MonthlySummary;
 use App\Domain\Period;
 
@@ -23,6 +24,7 @@ final readonly class ReportPresenter
     /**
      * @return array{
      *     seed: int,
+     *     algorithm: array{value: string, label: string, description: string},
      *     period: array{start: string, end: string, days: int},
      *     months: list<array{month: string, allowance: string, spent: string, remaining: string, percentUsed: float}>,
      *     days: list<array{
@@ -34,10 +36,17 @@ final readonly class ReportPresenter
      *     }>
      * }
      */
-    public function present(DailyReport $report, Period $period, int $seed): array
+    public function present(DailyReport $report, Period $period, int $seed, Algorithm $algorithm): array
     {
         return [
             'seed' => $seed,
+            // Part of a run's identity: the same file and seed under a different
+            // algorithm is a different run.
+            'algorithm' => [
+                'value' => $algorithm->value,
+                'label' => $algorithm->label(),
+                'description' => $algorithm->description(),
+            ],
             'period' => [
                 'start' => $period->start->format('Y-m-d'),
                 'end' => $period->end->format('Y-m-d'),
