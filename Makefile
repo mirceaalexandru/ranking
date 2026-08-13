@@ -1,34 +1,66 @@
-# Thin dispatcher. CI runs these same targets, so "works locally, fails in CI"
-# has one fewer cause.
+# Thin dispatcher over two toolchains. CI invokes these same targets, so the
+# checks have one definition rather than two that can drift apart.
 
-.PHONY: help install check check-api check-web test up down logs smoke
+API_PORT ?= 8081
+WEB_PORT ?= 5174
 
-help:
-	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+.PHONY: help install install-api install-web validate-api \
+        check check-api check-web lint-api lint-web test test-api test-web audit-api \
+        build up down logs logs-dump smoke
 
-install: ## Install dependencies for both halves
-	cd api && composer install
+help: ## List the available targets
+	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+## -- setup ------------------------------------------------------------------
+
+install: install-api install-web ## Install dependencies for both halves
+
+install-api:
+	cd api && composer install --no-interaction --no-progress --prefer-dist
+
+install-web:
 	cd web && npm ci
+
+## -- verification -----------------------------------------------------------
 
 check: check-api check-web ## Run every gate
 
-check-api: ## Formatting, static analysis, container lint, tests, audit
+check-api: validate-api lint-api test-api audit-api ## Every API gate
+
+check-web: lint-web test-web ## Every frontend gate
+
+validate-api: ## Manifest agrees with its lock file
+	cd api && composer validate --strict --no-check-publish
+
+lint-api: ## Formatting, static analysis, container and config linting
 	cd api && composer lint
 	cd api && composer stan
 	cd api && php bin/console lint:container
 	cd api && php bin/console lint:yaml config
-	cd api && composer test
-	cd api && composer audit
 
-check-web: ## Type check, lint, formatting, tests
-	cd web && npm run check
+lint-web: ## Types, lint rules, formatting
+	cd web && npm run typecheck
+	cd web && npm run lint
+	cd web && npm run format:check
 
-test: ## Just the test suites
+test: test-api test-web ## Both test suites
+
+test-api:
 	cd api && composer test
+
+test-web:
 	cd web && npm run test
 
-up: ## Start the stack
-	docker compose up -d --wait
+audit-api: ## Dependencies with published advisories
+	cd api && composer audit
+
+## -- running ----------------------------------------------------------------
+
+build: ## Build both images
+	docker compose build
+
+up: ## Start the stack and wait for health
+	docker compose up -d --wait --wait-timeout 180
 
 down: ## Stop the stack
 	docker compose down --volumes
@@ -36,6 +68,10 @@ down: ## Stop the stack
 logs: ## Follow container logs
 	docker compose logs -f
 
+logs-dump: ## Print container logs once
+	docker compose logs --no-color
+
 smoke: ## Verify the running stack answers
-	curl -fsS http://localhost:$${API_PORT:-8081}/api/health && echo
-	curl -fsS http://localhost:$${WEB_PORT:-5174}/ >/dev/null && echo "frontend ok"
+	@test "$$(curl -fsS http://localhost:$(API_PORT)/api/health)" = '{"status":"ok"}' && echo "api ok"
+	@curl -fsS http://localhost:$(WEB_PORT)/ | grep -q '<title>AdWords Budgets</title>' && echo "frontend ok"
+	@test "$$(curl -fsS http://localhost:$(WEB_PORT)/api/health)" = '{"status":"ok"}' && echo "proxy ok"

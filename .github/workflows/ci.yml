@@ -17,13 +17,14 @@ env:
     PHP_VERSION: '8.3'
     NODE_VERSION: '22'
 
+# Every job invokes `make` targets rather than repeating the commands here.
+# The Makefile is the single definition of what "checked" means, so what runs
+# in CI and what a developer runs locally cannot drift apart.
+
 jobs:
     api:
         name: API
         runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: api
         steps:
             - uses: actions/checkout@v4
 
@@ -31,13 +32,13 @@ jobs:
               uses: shivammathur/setup-php@v2
               with:
                   php-version: ${{ env.PHP_VERSION }}
-                  # No coverage driver: nothing here measures coverage, and Xdebug
+                  # No coverage driver: nothing measures coverage yet, and Xdebug
                   # makes the suite several times slower.
                   coverage: none
                   tools: composer:v2
 
             - name: Validate composer.json against its lock file
-              run: composer validate --strict --no-check-publish
+              run: make validate-api
 
             - name: Cache dependencies
               uses: actions/cache@v4
@@ -47,34 +48,22 @@ jobs:
                   restore-keys: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-
 
             - name: Install dependencies
-              run: composer install --no-interaction --no-progress --prefer-dist
+              run: make install-api
 
-            - name: Check formatting
-              run: composer lint
-
-            - name: Static analysis
-              run: composer stan
-
-            # Compile-time verification the test suite does not give you: every
-            # service is injected with values compatible with its type declarations.
-            - name: Lint the service container
-              run: php bin/console lint:container
-
-            - name: Lint configuration
-              run: php bin/console lint:yaml config
+            # Formatting, PHPStan at level max, and the service-container lint —
+            # the last of which is compile-time verification no test provides.
+            - name: Lint
+              run: make lint-api
 
             - name: Tests
-              run: composer test
+              run: make test-api
 
             - name: Audit dependencies for known advisories
-              run: composer audit
+              run: make audit-api
 
     web:
         name: Web
         runs-on: ubuntu-latest
-        defaults:
-            run:
-                working-directory: web
         steps:
             - uses: actions/checkout@v4
 
@@ -85,21 +74,16 @@ jobs:
                   cache: npm
                   cache-dependency-path: web/package-lock.json
 
-            # ci, not install: fails on lock drift instead of quietly resolving something else.
+            # npm ci, not install: fails on lock drift instead of quietly
+            # resolving something else.
             - name: Install dependencies
-              run: npm ci
+              run: make install-web
 
-            - name: Type check
-              run: npm run typecheck
-
-            - name: Lint
-              run: npm run lint
-
-            - name: Check formatting
-              run: npm run format:check
+            - name: Lint and type check
+              run: make lint-web
 
             - name: Tests
-              run: npm run test
+              run: make test-web
 
     docker:
         name: Docker
@@ -108,33 +92,24 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Build images
-              run: docker compose build
+              run: make build
 
-            # The only job that verifies what a reviewer will actually do.
-            # Unit tests passing while the image fails to build is a real failure mode.
+            # The only job that verifies what a reader will actually do.
+            # Unit tests passing while the image fails to build is a real
+            # failure mode, and an embarrassing one to discover by hand.
             - name: Start the stack
-              run: docker compose up -d --wait --wait-timeout 180
+              run: make up
 
-            - name: Smoke test the API
-              run: |
-                  set -euo pipefail
-                  body=$(curl -fsS http://localhost:8081/api/health)
-                  echo "$body"
-                  test "$body" = '{"status":"ok"}'
-
-            - name: Smoke test the frontend
-              run: curl -fsS http://localhost:5174/ | grep -q '<title>AdWords Budgets</title>'
-
-            - name: Verify the frontend proxies to the API
-              run: test "$(curl -fsS http://localhost:5174/api/health)" = '{"status":"ok"}'
+            - name: Smoke test
+              run: make smoke
 
             - name: Container logs
               if: failure()
-              run: docker compose logs --no-color
+              run: make logs-dump
 
             - name: Stop the stack
               if: always()
-              run: docker compose down --volumes
+              run: make down
 
     # Single required check for branch protection: adding a job above does not
     # mean reconfiguring the repository settings.
