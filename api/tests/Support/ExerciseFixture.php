@@ -6,6 +6,7 @@ namespace App\Tests\Support;
 
 use App\Domain\BudgetChange;
 use App\Domain\BudgetHistory;
+use App\Domain\CostEvent;
 use App\Domain\Money;
 use App\Domain\Period;
 use DateTimeImmutable;
@@ -52,5 +53,42 @@ final class ExerciseFixture
     public static function day(string $date): DateTimeImmutable
     {
         return new DateTimeImmutable($date);
+    }
+
+    /**
+     * The costs the exercise itself prints as example output.
+     *
+     * Reproduced exactly, including the fact that 01.03's are listed out of
+     * chronological order (10:00, 12:00, 11:00) — apparently a typo, and
+     * harmless once sorted, but not silently corrected here.
+     *
+     * @return list<CostEvent>
+     */
+    public static function generatedCosts(): array
+    {
+        $costs = [
+            ['2019-01-01 10:05', '1'],
+            ['2019-01-01 10:50', '3.12'],
+            ['2019-01-01 23:59', '1'],
+            ['2019-01-02 11:00', '2.1'],
+            ['2019-01-03 10:00', '1.1'],
+            ['2019-01-03 12:00', '1.2'],
+            ['2019-01-03 11:00', '2.9'],
+            ['2019-01-04 10:00', '8'],
+            ['2019-01-05 07:00', '2'],
+            ['2019-01-05 09:00', '3'],
+        ];
+
+        $events = array_map(
+            static fn (array $cost): CostEvent => new CostEvent(
+                new DateTimeImmutable($cost[0]),
+                Money::fromDecimalString($cost[1]),
+            ),
+            $costs,
+        );
+
+        usort($events, static fn (CostEvent $a, CostEvent $b): int => $a->at <=> $b->at);
+
+        return $events;
     }
 }
