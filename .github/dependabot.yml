@@ -1,0 +1,29 @@
+version: 2
+
+# Grouped so a week's patches arrive as one pull request per ecosystem
+# rather than one per package.
+updates:
+    - package-ecosystem: composer
+      directory: /api
+      schedule:
+          interval: weekly
+      groups:
+          php:
+              patterns: ['*']
+
+    - package-ecosystem: npm
+      directory: /web
+      schedule:
+          interval: weekly
+      groups:
+          javascript:
+              patterns: ['*']
+
+    # Actions pinned by major tag drift silently; this is the one that matters most.
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          actions:
+              patterns: ['*']

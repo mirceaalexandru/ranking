@@ -1,3 +1,6 @@
 dist
 coverage
 node_modules
+# Vite's dependency cache, written by the dev server through the bind mount.
+.vite
+package-lock.json

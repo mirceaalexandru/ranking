@@ -62,6 +62,29 @@ are commonly already taken.
 ### Working on it directly
 
 ```bash
-cd api && composer check     # php-cs-fixer, PHPStan at max, PHPUnit
-cd web && npm run check      # tsc, ESLint, Prettier, Vitest
+make check     # every gate, the same commands CI runs
+make test      # just the test suites
+make up        # start the stack and wait for health
+make smoke     # verify the running stack answers
 ```
+
+`make help` lists the rest.
+
+## Continuous integration
+
+Every push and pull request runs three jobs:
+
+| Job | Checks |
+| --- | ------ |
+| **API** | `composer validate --strict`, formatting, PHPStan at level max, service-container lint, YAML lint, PHPUnit, `composer audit` |
+| **Web** | `npm ci` against the committed lock, `tsc --noEmit`, ESLint, Prettier, Vitest |
+| **Docker** | builds both images, starts the stack, waits for health, and curls the API, the frontend and the proxied endpoint |
+
+The Docker job exists because a green test suite says nothing about whether `docker compose up` — the
+thing a reader will actually do — still works.
+
+A single aggregating `CI` check depends on all three, so branch protection needs one required status
+rather than reconfiguration whenever a job is added.
+
+Tagging `v*` builds both images and publishes them to GHCR. **There is no deploy step**: this exercise has
+no environment to deploy to, and a stubbed one would be worse than its absence.
