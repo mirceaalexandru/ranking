@@ -5,7 +5,7 @@ API_PORT ?= 8081
 WEB_PORT ?= 5174
 
 .PHONY: help install install-api install-web validate-api \
-        check check-api check-web lint-api lint-web test test-api test-web audit-api \
+        check check-api check-web fix lint-api lint-web test test-api test-web audit-api \
         build up down logs logs-dump smoke
 
 help: ## List the available targets
@@ -31,6 +31,10 @@ check-web: lint-web test-web ## Every frontend gate
 
 validate-api: ## Manifest agrees with its lock file
 	cd api && composer validate --strict --no-check-publish
+
+fix: ## Apply the formatters
+	cd api && composer fix
+	cd web && npm run format
 
 lint-api: ## Formatting, static analysis, container and config linting
 	cd api && composer lint

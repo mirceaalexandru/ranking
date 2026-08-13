@@ -7,3 +7,10 @@ services:
         resource: '../src/'
         exclude:
             - '../src/Kernel.php'
+
+when@test:
+    services:
+        # Symfony's fallback logger writes to stderr, so a test that deliberately
+        # provokes a 404 prints a red [error] line next to a passing suite.
+        logger:
+            class: Psr\Log\NullLogger
