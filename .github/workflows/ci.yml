@@ -1,0 +1,154 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+# A superseded run tells you nothing; cancel it and free the runner.
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+env:
+    PHP_VERSION: '8.3'
+    NODE_VERSION: '22'
+
+jobs:
+    api:
+        name: API
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: api
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ env.PHP_VERSION }}
+                  # No coverage driver: nothing here measures coverage, and Xdebug
+                  # makes the suite several times slower.
+                  coverage: none
+                  tools: composer:v2
+
+            - name: Validate composer.json against its lock file
+              run: composer validate --strict --no-check-publish
+
+            - name: Cache dependencies
+              uses: actions/cache@v4
+              with:
+                  path: api/vendor
+                  key: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-${{ hashFiles('api/composer.lock') }}
+                  restore-keys: composer-${{ runner.os }}-${{ env.PHP_VERSION }}-
+
+            - name: Install dependencies
+              run: composer install --no-interaction --no-progress --prefer-dist
+
+            - name: Check formatting
+              run: composer lint
+
+            - name: Static analysis
+              run: composer stan
+
+            # Compile-time verification the test suite does not give you: every
+            # service is injected with values compatible with its type declarations.
+            - name: Lint the service container
+              run: php bin/console lint:container
+
+            - name: Lint configuration
+              run: php bin/console lint:yaml config
+
+            - name: Tests
+              run: composer test
+
+            - name: Audit dependencies for known advisories
+              run: composer audit
+
+    web:
+        name: Web
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: web
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: web/package-lock.json
+
+            # ci, not install: fails on lock drift instead of quietly resolving something else.
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Type check
+              run: npm run typecheck
+
+            - name: Lint
+              run: npm run lint
+
+            - name: Check formatting
+              run: npm run format:check
+
+            - name: Tests
+              run: npm run test
+
+    docker:
+        name: Docker
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Build images
+              run: docker compose build
+
+            # The only job that verifies what a reviewer will actually do.
+            # Unit tests passing while the image fails to build is a real failure mode.
+            - name: Start the stack
+              run: docker compose up -d --wait --wait-timeout 180
+
+            - name: Smoke test the API
+              run: |
+                  set -euo pipefail
+                  body=$(curl -fsS http://localhost:8081/api/health)
+                  echo "$body"
+                  test "$body" = '{"status":"ok"}'
+
+            - name: Smoke test the frontend
+              run: curl -fsS http://localhost:5174/ | grep -q '<title>AdWords Budgets</title>'
+
+            - name: Verify the frontend proxies to the API
+              run: test "$(curl -fsS http://localhost:5174/api/health)" = '{"status":"ok"}'
+
+            - name: Container logs
+              if: failure()
+              run: docker compose logs --no-color
+
+            - name: Stop the stack
+              if: always()
+              run: docker compose down --volumes
+
+    # Single required check for branch protection: adding a job above does not
+    # mean reconfiguring the repository settings.
+    ci:
+        name: CI
+        runs-on: ubuntu-latest
+        needs: [api, web, docker]
+        if: always()
+        steps:
+            - name: Fail if any job did not succeed
+              run: |
+                  set -euo pipefail
+                  results="${{ needs.api.result }} ${{ needs.web.result }} ${{ needs.docker.result }}"
+                  echo "Results: $results"
+                  for result in $results; do
+                      test "$result" = success
+                  done
