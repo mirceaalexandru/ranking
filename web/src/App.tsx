@@ -9,7 +9,6 @@ export function App(): React.JSX.Element {
     const [health, setHealth] = useState<Health>({ state: 'checking' })
 
     const check = useCallback((signal?: AbortSignal) => {
-        setHealth({ state: 'checking' })
         fetchHealth(signal)
             .then((result) => {
                 setHealth({ state: 'up', status: result.status })
@@ -44,6 +43,7 @@ export function App(): React.JSX.Element {
                 <button
                     type="button"
                     onClick={() => {
+                        setHealth({ state: 'checking' })
                         check()
                     }}
                     disabled={health.state === 'checking'}
