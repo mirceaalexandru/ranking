@@ -26,6 +26,17 @@ final readonly class SimulateController
 {
     private const int MAX_UPLOAD_BYTES = 1_048_576;
 
+    /**
+     * Six digits: short enough to read off the screen, quote in a bug report and
+     * type back in, and a million distinct runs is far more than this needs.
+     *
+     * It also stays well inside JavaScript's safe integer range. A seed near
+     * PHP_INT_MAX serialises as a JSON number the browser cannot represent
+     * exactly, so the value shown would not be the value that produced the run,
+     * and replaying it would quietly give a different one.
+     */
+    private const int MAX_SEED = 999_999;
+
     public function __construct(
         private BudgetHistoryReader $reader,
         private Simulator $simulator,
@@ -83,14 +94,16 @@ final readonly class SimulateController
         $raw = $request->request->get('seed');
 
         if (null === $raw || '' === $raw) {
-            return random_int(1, PHP_INT_MAX);
+            return random_int(1, self::MAX_SEED);
         }
 
         if (!is_string($raw) || 1 !== preg_match('/^\d+$/', $raw)) {
             return null;
         }
 
-        return (int) $raw;
+        $seed = (int) $raw;
+
+        return $seed >= 1 && $seed <= self::MAX_SEED ? $seed : null;
     }
 
     private function problem(string $message, int $status): JsonResponse
