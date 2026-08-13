@@ -1,6 +1,4 @@
-export interface HealthStatus {
-    status: string
-}
+import type { Simulation, ValidationError } from './types'
 
 export class ApiError extends Error {
     constructor(message: string, options?: ErrorOptions) {
@@ -9,21 +7,38 @@ export class ApiError extends Error {
     }
 }
 
-/**
- * The single place API calls are defined. One endpoint hardly justifies a module,
- * but the pattern is cheaper to set now than to retrofit once there are several.
- */
-export async function fetchHealth(signal?: AbortSignal): Promise<HealthStatus> {
+/** The file was read but rejected. Carries one entry per problem found. */
+export class InvalidCsv extends Error {
+    constructor(readonly errors: ValidationError[]) {
+        super(`The file has ${String(errors.length)} problem(s).`)
+        this.name = 'InvalidCsv'
+    }
+}
+
+export const sampleUrl = '/api/sample'
+
+export async function simulate(file: File, seed?: string): Promise<Simulation> {
+    const body = new FormData()
+    body.append('file', file)
+    if (seed !== undefined && seed !== '') {
+        body.append('seed', seed)
+    }
+
     let response: Response
     try {
-        response = await fetch('/api/health', signal ? { signal } : {})
+        response = await fetch('/api/simulate', { method: 'POST', body })
     } catch (cause) {
         throw new ApiError('The API is unreachable.', { cause })
+    }
+
+    if (response.status === 422 || response.status === 400) {
+        const payload = (await response.json()) as { errors?: ValidationError[] }
+        throw new InvalidCsv(payload.errors ?? [])
     }
 
     if (!response.ok) {
         throw new ApiError(`The API answered with status ${String(response.status)}.`)
     }
 
-    return (await response.json()) as HealthStatus
+    return (await response.json()) as Simulation
 }

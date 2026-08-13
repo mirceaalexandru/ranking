@@ -121,6 +121,11 @@ final class SimulateEndpointTest extends WebTestCase
         self::assertIsInt($body['seed']);
         self::assertGreaterThan(0, $body['seed']);
 
+        // Short enough to read off the screen and type back in — and well
+        // inside JavaScript's safe integer range, so the value shown is the
+        // value that produced the run rather than a rounded approximation.
+        self::assertLessThanOrEqual(999_999, $body['seed']);
+
         // Replaying with the returned seed reproduces the run exactly.
         $original = (string) $client->getResponse()->getContent();
         $this->upload($client, $this->sampleCsv(), (string) $body['seed']);
@@ -173,6 +178,14 @@ final class SimulateEndpointTest extends WebTestCase
     {
         $client = static::createClient();
         $this->upload($client, $this->sampleCsv(), 'not-a-number');
+
+        self::assertResponseStatusCodeSame(400);
+    }
+
+    public function testASeedBeyondTheSafeRangeIsRejectedRatherThanSilentlyAltered(): void
+    {
+        $client = static::createClient();
+        $this->upload($client, $this->sampleCsv(), '9223372036854775807');
 
         self::assertResponseStatusCodeSame(400);
     }
