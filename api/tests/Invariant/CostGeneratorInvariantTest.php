@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Invariant;
 
+use App\Csv\BudgetHistoryReader;
 use App\Domain\BudgetHistory;
 use App\Domain\BudgetTimeline;
 use App\Domain\CostEvent;
@@ -147,6 +148,29 @@ final class CostGeneratorInvariantTest extends TestCase
 
         $events = (new CostGenerator($history, $timeline, $allowance))->generate(new SeededRandom($seed));
 
+        $this->assertInvariants($events, $history, $allowance, $seed);
+    }
+
+    /**
+     * The example the API ships is generated from, so it must not merely parse:
+     * a run over it has to satisfy every invariant, on any seed. Shipping an
+     * example that breaks the rules would be a bad way to be found out.
+     */
+    #[DataProvider('seeds')]
+    public function testEveryInvariantHoldsForTheShippedSample(int $seed): void
+    {
+        $csv = (string) file_get_contents(__DIR__.'/../../fixtures/sample.csv');
+        $result = (new BudgetHistoryReader())->read($csv);
+
+        self::assertTrue($result->isSuccessful(), 'the shipped example must parse');
+
+        $history = $result->history();
+        $timeline = new BudgetTimeline($history, ExerciseFixture::period());
+        $allowance = new MonthlyAllowance($history, $timeline);
+
+        $events = (new CostGenerator($history, $timeline, $allowance))->generate(new SeededRandom($seed));
+
+        self::assertNotEmpty($events, "seed {$seed}: the shipped example generated nothing");
         $this->assertInvariants($events, $history, $allowance, $seed);
     }
 
