@@ -70,6 +70,24 @@ function MonthCard({ month }: { month: MonthSummary }): React.JSX.Element {
     )
 }
 
+interface TimelineRow {
+    at: string
+    kind: 'budget' | 'cost'
+    amount: string
+}
+
+/**
+ * Budget changes and costs interleaved in the order they happened, which is the
+ * order that makes a day legible: a cost means nothing without the budget that
+ * was in effect when it fired.
+ */
+function timeline(day: DayRow): TimelineRow[] {
+    return [
+        ...day.changes.map((change): TimelineRow => ({ ...change, kind: 'budget' })),
+        ...day.events.map((event): TimelineRow => ({ ...event, kind: 'cost' })),
+    ].sort((a, b) => a.at.localeCompare(b.at))
+}
+
 function Day({ day }: { day: DayRow }): React.JSX.Element {
     const [open, setOpen] = useState(false)
     const hasDetail = day.events.length > 0 || day.changes.length > 0
@@ -102,18 +120,30 @@ function Day({ day }: { day: DayRow }): React.JSX.Element {
             {open && (
                 <tr className="detail">
                     <td colSpan={4}>
-                        {day.changes.length > 0 && (
-                            <p>
-                                <strong>Budget changes:</strong>{' '}
-                                {day.changes.map((c) => `${c.amount} at ${c.at}`).join(', ')}
-                            </p>
-                        )}
-                        {day.events.length > 0 && (
-                            <p>
-                                <strong>Costs:</strong>{' '}
-                                {day.events.map((e) => `${e.amount} at ${e.at}`).join(', ')}
-                            </p>
-                        )}
+                        <table className="detail__table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Time</th>
+                                    <th scope="col">Event</th>
+                                    <th scope="col" className="numeric">
+                                        Amount
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {timeline(day).map((row) => (
+                                    <tr key={`${row.kind}-${row.at}`}>
+                                        <td>{row.at}</td>
+                                        <td>
+                                            <span className={`tag tag--${row.kind}`}>
+                                                {row.kind === 'budget' ? 'Budget set' : 'Cost'}
+                                            </span>
+                                        </td>
+                                        <td className="numeric">{row.amount}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </td>
                 </tr>
             )}

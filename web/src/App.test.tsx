@@ -151,8 +151,22 @@ describe('App', () => {
 
         fireEvent.click(expand)
 
-        expect(screen.getByText(/1.23 at 09:14:22/)).toBeInTheDocument()
-        expect(screen.getByText(/5.00 at 09:00:00/)).toBeInTheDocument()
+        // Budget changes and costs interleaved in the order they happened.
+        const detail = screen.getAllByRole('table')[1]
+        expect(detail).toBeDefined()
+        const rows = within(detail as HTMLElement)
+            .getAllByRole('row')
+            .slice(1)
+            .map((row) =>
+                within(row)
+                    .getAllByRole('cell')
+                    .map((cell) => cell.textContent),
+            )
+
+        expect(rows).toEqual([
+            ['09:00:00', 'Budget set', '5.00'],
+            ['09:14:22', 'Cost', '1.23'],
+        ])
     })
 
     it('shows the allowance alongside the spend, flagging a month that went over', async () => {
