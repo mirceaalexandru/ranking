@@ -18,7 +18,7 @@ budget**. The task is to generate those costs and produce a daily history of bud
 | Document                                                   | Contents                                                                                                                                                                                                 |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [docs/exercise.md](docs/exercise.md)         | The exercise as given, transcribed verbatim, with its worked example.                                                                                                                                                        |
-| [docs/decision-log.md](docs/decision-log.md) | One line per working session: what was decided, and what was later changed. |
+| [docs/development-log.md](docs/development-log.md) | One line per working session: what was decided, and what was later changed. |
 | [docs/requirements.md](docs/requirements.md) | Functional and non-functional requirements, run invariants, acceptance criteria.                                                                                                                                             |
 | [docs/algorithm.md](docs/algorithm.md)       | How costs are generated: a single chronological sweep, one blocking rule, seeded randomness.                                                                                                                                 |
 | [docs/architecture.md](docs/architecture.md) | Stack, project layout, API surface, testing strategy.                                                                                                                                                                        |
@@ -31,7 +31,7 @@ breaks rule 1 only if you assume the budget resets each day, and the example its
 assumption. Exactly one reading makes all eight rows and every generated cost consistent.
 
 That reading, and every other decision the exercise forced, is recorded with its evidence in
-[decision-log.md](docs/decision-log.md).
+[development-log.md](docs/development-log.md).
 
 ## Stack
 

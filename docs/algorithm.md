@@ -1,7 +1,7 @@
 # The algorithm
 
 Implements [requirements.md](requirements.md), under the readings recorded in
-[decision-log.md](decision-log.md).
+[development-log.md](development-log.md).
 
 The simulation is a **single chronological sweep**. There is no backtracking and no reject-and-retry loop:
 each cost is drawn from the headroom that remains at that instant, so both caps hold by construction

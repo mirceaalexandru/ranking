@@ -1,9 +1,10 @@
-# Decision log
+# Development log
 
-One entry per working session. What was decided lives in [requirements.md](requirements.md) and
-[algorithm.md](algorithm.md); this is the record of how it got there.
+One entry per working session or delivered story, newest first. What was decided lives in
+[requirements.md](requirements.md) and [algorithm.md](algorithm.md); this is the record of how it got
+there.
 
-| Session | By | Focus | Decided | Changed course on |
-| ------- | -- | ----- | ------- | ----------------- |
+| # | By | Focus | Outcome | Changed course on |
+| - | -- | ----- | ------- | ----------------- |
 | 2 | Developer | Input format, and how much state to keep | The budget history is a CSV. The server is stateless: `POST /api/simulate` takes an uploaded CSV and a seed and returns the costs and the report, `GET /api/sample` serves the example. No in-app editing of budget changes — download the example, edit it in a spreadsheet, upload it. | Dropped MySQL, then dropped the in-memory working copy that briefly replaced it. The database had been chosen before the input format was settled, and its real job was storing named scenarios — which a CSV file already does. Keeping a server-side copy so the UI could edit it was the same mistake one size down: state nobody asked for, and PHP-FPM would have needed a shared backing store for it to survive a request at all. |
 | 1 | Developer + AI | Reading the specification | Dates are `MM.DD.YYYY`. Budgets carry forward until the next change. The daily cap is evaluated at the moment of generation and never rolls back. The report shows the budget the user *set*; rule 2 sums the budget *in effect* — two requirements, two quantities. The allowance is recomputed at each attempt from what is known then, never from future budgets. One refusal rule covers pause, daily overspend and monthly exhaustion. 1–10 attempts per day at uniform moments. Stack: Symfony 7 + MySQL 8 + React, algorithm as framework-free PHP. | Read the example as self-contradictory on 01.05 — it is not; the contradiction only appears if budgets reset daily, which the example disproves. Which maximum rule 2 sums, twice: first on a wording argument that was too thin, then back on example evidence that turned out to be about the report rather than the allowance. Computing the allowance up-front from the full history, before recognising that generation must only ever see the past. |

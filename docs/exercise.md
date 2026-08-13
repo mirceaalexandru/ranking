@@ -1,7 +1,7 @@
 # The exercise, as given
 
 Transcribed verbatim from `Web Recruitment Exercise - AdWords Budgets.pdf`. Nothing on this page is our
-own wording — how it was read, and what was decided, lives in [decision-log.md](decision-log.md).
+own wording — how it was read, and what was decided, lives in [development-log.md](development-log.md).
 
 ---
 

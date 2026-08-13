@@ -1,7 +1,7 @@
 # Requirements
 
 Derived from [exercise.md](exercise.md), with every ambiguity resolved per
-[decision-log.md](decision-log.md). Each requirement is written to be verifiable; the
+[development-log.md](development-log.md). Each requirement is written to be verifiable; the
 invariants and acceptance criteria are what the test suite asserts.
 
 Legend: **FR** functional · **NFR** non-functional · **INV** invariant that must hold for every generated
@@ -17,32 +17,31 @@ which the exercise's input is monotonic and spans three months. Amounts are non-
 decimal places. Zero means the campaign is paused.
 
 **FR-2 — Carry-over.** A budget change stays in effect until the next change, including across day and
-month boundaries. Days with no change inherit the last value set. *(Ref: [decision log #2](decision-log.md).)*
+month boundaries. Days with no change inherit the last value set.
 
 **FR-3 — No budget before the first change.** Time preceding the first budget change has no budget: the
-cap is zero and no costs can be generated. *(Ref: [decision log #8](decision-log.md).)*
+cap is zero and no costs can be generated.
 
 **FR-4 — Cost generation.** For each day in the period the system makes between **1 and 10** attempts, at
 random instants drawn uniformly across the day and processed in chronological order.
 
 **FR-5 — Daily cap (rule 1).** At the instant a cost is generated,
 `spent_today + cost <= 2 × budget_in_effect_at_that_instant`. The cap is re-evaluated at every attempt and
-never retroactively invalidates costs already generated. *(Ref: [decision log #4](decision-log.md).)*
+never retroactively invalidates costs already generated.
 
 **FR-6 — Monthly cap (rule 2).** At the instant a cost is generated,
 `spent_month + cost <= allowance_at(t)`, where the allowance is computed from what is known at that
 moment — elapsed days contribute their `max_budget`, today contributes the greatest budget reached so far
 today, and days still to come are projected at the current budget. Generation never consults budgets the
-user has not yet set. *(Ref: [decision log #7](decision-log.md).)*
+user has not yet set.
 
 **FR-6a — A day's maximum.** `max_budget(day)` is the largest budget **in effect** at any instant of that
 day, carry-over included — regardless of whether the user set it that day or it was carried in from
 earlier. This is the figure rule 2 sums, and it is a separate requirement from the report's column
-(FR-9). *(Ref: [decision log #6](decision-log.md).)*
+(FR-9).
 
 **FR-6b — Spikes count.** A budget held only briefly contributes its full value to that day's maximum, and
 remains in the allowance for the rest of the day once reached.
-*(Ref: [decision log #21](decision-log.md).)*
 
 **FR-7 — Refused attempts generate nothing.** When an attempt has no headroom under FR-5 or FR-6, no cost
 is recorded for that instant. A paused campaign and an exhausted budget are refused by the same rule, not
@@ -60,7 +59,7 @@ none — and the total costs generated.
 This is a **different quantity** from the `max_budget` of FR-6a, and deliberately so: rule 2 constrains
 generation, requirement 2 describes the report. They coincide except on days where the user lowers the
 budget below a higher carried value. The report's Budget column therefore does not sum to the monthly
-allowance, which is shown explicitly instead. *(Ref: [decision log #5](decision-log.md).)*
+allowance, which is shown explicitly instead.
 
 **FR-10 — Days with no activity appear.** Every calendar day in the period has a row, including days with
 no budget change and no costs.
@@ -70,7 +69,7 @@ summary, as in the exercise's own output.
 
 **FR-11a — Budget changes are listed.** The budget changes and their timestamps are shown alongside the
 daily rows, so a reader can see what the budget actually did during a day rather than only its daily
-maximum. *(Ref: [decision log #5](decision-log.md).)*
+maximum.
 
 ## Input
 
