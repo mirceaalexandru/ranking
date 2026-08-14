@@ -40,38 +40,53 @@ Messenger, mailer or security surface.
 ```
 apps/ranking/
 ├── docs/                       these documents
-├── fixtures/
-│   └── sample.csv              the exercise's budget history — test fixture and the downloadable example
 ├── api/                        Symfony application
+│   ├── fixtures/sample.csv     the example — served for download, and simulated in the tests
 │   ├── src/
 │   │   ├── Domain/             framework-free — the exercise itself
 │   │   │   ├── Money.php                  integer-cents value object
 │   │   │   ├── BudgetChange.php
-│   │   │   ├── BudgetHistory.php          sorted changes; budgetAt(t)
-│   │   │   ├── BudgetTimeline.php         budget at an instant; per-day max_budget / max_budget_set
+│   │   │   ├── BudgetHistory.php          sorted changes; budgetAt(t); coveringPeriod()
+│   │   │   ├── BudgetTimeline.php         per-day maxBudget / maxBudgetSet
 │   │   │   ├── Period.php
-│   │   │   ├── MonthlyAllowance.php       rule 2
-│   │   │   ├── CostGenerator.php          the chronological sweep, rule 1
+│   │   │   ├── MonthlyAllowance.php       rule 2, as known at each instant
+│   │   │   ├── CostGenerator.php          the chronological sweep
+│   │   │   ├── CostEvent.php
 │   │   │   ├── SeededRandom.php           Randomizer wrapper
-│   │   │   └── DailyReportBuilder.php
+│   │   │   ├── Simulator.php              wires history → report
+│   │   │   ├── DailyReport.php · DailyReportRow.php · MonthlySummary.php
+│   │   │   ├── DailyReportBuilder.php     folds costs into the report
+│   │   │   └── Generation/
+│   │   │       ├── CostAlgorithm.php      one method: spend a day
+│   │   │       ├── DaySession.php         the guard rail — clamps every request to the caps
+│   │   │       ├── GreedyAlgorithm.php
+│   │   │       ├── PacedAlgorithm.php
+│   │   │       └── Algorithm.php          the enum a request selects by
 │   │   ├── Csv/
 │   │   │   ├── BudgetHistoryReader.php    parse + validate, errors carry line numbers
 │   │   │   ├── CsvError.php
 │   │   │   └── ReadResult.php
 │   │   ├── Http/
 │   │   │   └── ReportPresenter.php        shapes a report for the wire
-│   │   └── Controller/         thin: deserialize → domain → serialize
+│   │   ├── Controller/         thin: deserialize → domain → serialize
+│   │   │   ├── HealthController.php
+│   │   │   ├── SampleController.php
+│   │   │   └── SimulateController.php
+│   │   └── Kernel.php
 │   └── tests/
 │       ├── Unit/               domain and CSV parsing, no kernel
-│       ├── Invariant/          property-style, many seeds (INV-1 … INV-8)
-│       └── Functional/         the endpoints
+│       ├── Invariant/          property-style sweeps across many seeds
+│       ├── Functional/         the endpoints
+│       └── Support/            the exercise's own history and costs
 ├── web/                        React + Vite
 │   └── src/
-│       ├── api/                typed client
+│       ├── api/                typed client and response types
 │       ├── features/
-│       │   ├── upload/         download the example, upload a CSV, show validation errors
-│       │   └── report/         daily report table
-│       └── lib/                money formatting, date handling
+│       │   ├── upload/         download the example, choose an algorithm, upload
+│       │   └── report/         monthly cards, daily table, validation problems
+│       └── styles.css
+├── .github/workflows/          CI and release
+├── Makefile                    the targets CI invokes
 └── docker-compose.yml
 ```
 
@@ -91,8 +106,12 @@ notation and there is no reason to inherit it — but the reader also accepts `M
 exercise's dates can be used unchanged.
 
 Validation errors carry the line that caused them: a malformed time, a negative amount, a duplicate
-timestamp, a row outside the period. The reader reports every problem in one pass rather than failing on
-the first.
+timestamp. The reader reports every problem in one pass rather than failing on the first.
+
+It also checks **plausibility**, not only format. A daily budget above 1,000,000 is refused as a typo
+rather than honoured, and a file spanning more than five years is refused rather than reported a day at a
+time. Both were found by review: without them an extra zero overflowed the pacing arithmetic into a 500,
+and two rows a century apart exhausted memory and returned a truncated fatal error instead of JSON.
 
 ## API
 

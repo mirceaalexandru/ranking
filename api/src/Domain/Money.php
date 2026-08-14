@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain;
 
-use InvalidArgumentException;
+use App\Domain\Exception\AmountOutOfRange;
+use App\Domain\Exception\MalformedAmount;
 use Stringable;
 
 /**
@@ -42,7 +43,11 @@ final readonly class Money implements Stringable
         $trimmed = trim($value);
 
         if (1 !== preg_match('/^(-)?(\d+)(?:\.(\d{1,2}))?$/', $trimmed, $matches)) {
-            throw new InvalidArgumentException(sprintf('Expected a decimal amount with at most two decimal places, got "%s".', $value));
+            throw MalformedAmount::from($value);
+        }
+
+        if (strlen(ltrim($matches[2], '0')) > 15) {
+            throw AmountOutOfRange::from($value);
         }
 
         $units = (int) $matches[2];

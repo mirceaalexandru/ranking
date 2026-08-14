@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Invariant;
 
+use App\Domain\BudgetChange;
 use App\Domain\BudgetHistory;
 use App\Domain\BudgetTimeline;
 use App\Domain\CostEvent;
@@ -210,6 +211,34 @@ final class AlgorithmInvariantTest extends TestCase
             $days * 0.1,
             $daysAboveBudget,
             'some days should exceed one budget, or the 2x headroom is dead code',
+        );
+    }
+
+    public function testPacingIsSoundAtTheLargestBudgetTheReaderAccepts(): void
+    {
+        $ceiling = Money::fromCents(100_000_000); // 1,000,000.00 a day
+
+        $history = new BudgetHistory([
+            new BudgetChange(new DateTimeImmutable('2019-01-01 00:00'), $ceiling),
+        ]);
+        $period = new Period(new DateTimeImmutable('2019-01-01'), new DateTimeImmutable('2019-01-31'));
+        $timeline = new BudgetTimeline($history, $period);
+        $allowance = new MonthlyAllowance($history, $timeline);
+
+        $events = (new CostGenerator($history, $timeline, $allowance))
+            ->generate(new SeededRandom(1), Algorithm::Paced);
+
+        self::assertNotEmpty($events);
+
+        $spentThisMonth = Money::zero();
+        foreach ($events as $event) {
+            $spentThisMonth = $spentThisMonth->plus($event->amount);
+            self::assertTrue($event->amount->isPositive());
+        }
+
+        self::assertFalse(
+            $spentThisMonth->greaterThan($allowance->closingFor(new DateTimeImmutable('2019-01-01'))),
+            'the month should still respect its allowance at the ceiling',
         );
     }
 
