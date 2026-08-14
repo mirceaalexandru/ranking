@@ -15,23 +15,13 @@ budget**. The task is to generate those costs and produce a daily history of bud
 
 ## Documentation
 
-| Document                                                   | Contents                                                                                                                                                                                                 |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [docs/exercise.md](docs/exercise.md)         | The exercise as given, transcribed verbatim, with its worked example.                                                                                                                                                        |
-| [docs/development-log.md](docs/development-log.md) | One line per working session: what was decided, and what was later changed. |
-| [docs/requirements.md](docs/requirements.md) | Functional and non-functional requirements, run invariants, acceptance criteria.                                                                                                                                             |
-| [docs/algorithm.md](docs/algorithm.md)       | How costs are generated: a single chronological sweep, one blocking rule, seeded randomness, and the two selectable algorithms — greedy and paced.                                                                          |
-| [docs/architecture.md](docs/architecture.md) | Stack, project layout, API surface, testing strategy.                                                                                                                                                                        |
-
-## The interesting part
-
-The specification leaves several things open, and the worked example in the PDF looks at first glance as
-though it violates its own rules. It does not. Day 01.05 shows a budget of 2 against costs of 5 — which
-breaks rule 1 only if you assume the budget resets each day, and the example itself disproves that
-assumption. Exactly one reading makes all eight rows and every generated cost consistent.
-
-That reading, and every other decision the exercise forced, is recorded with its evidence in
-[development-log.md](docs/development-log.md).
+| Document                                           | Contents                                                                                                                                           |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/exercise.md](docs/exercise.md)               | The exercise as given, transcribed verbatim, with its worked example.                                                                              |
+| [docs/development-log.md](docs/development-log.md) | One line per working session: what was decided, and what was later changed.                                                                        |
+| [docs/requirements.md](docs/requirements.md)       | Functional and non-functional requirements, run invariants, acceptance criteria.                                                                   |
+| [docs/algorithm.md](docs/algorithm.md)             | How costs are generated: a single chronological sweep, one blocking rule, seeded randomness, and the two selectable algorithms — greedy and paced. |
+| [docs/architecture.md](docs/architecture.md)       | Stack, project layout, API surface, testing strategy.                                                                                              |
 
 ## Stack
 
@@ -51,10 +41,10 @@ docker compose up
 
 Brings up the API and frontend; no local PHP or Node installation required.
 
-| | |
-| --- | --- |
-| Frontend | http://localhost:5174 |
-| API | http://localhost:8081/api/health |
+|          |                                  |
+| -------- | -------------------------------- |
+| Frontend | http://localhost:5174            |
+| API      | http://localhost:8081/api/health |
 
 Both host ports are overridable — `WEB_PORT=5200 API_PORT=8090 docker compose up` — since 5173 and 8080
 are commonly already taken.
@@ -75,17 +65,14 @@ what "checked" means — what runs in the pipeline and what you run locally cann
 
 Every push and pull request runs three jobs:
 
-| Job | Checks |
-| --- | ------ |
-| **API** | `make validate-api lint-api test-api audit-api` — manifest/lock agreement, formatting, PHPStan at level max, service-container lint, YAML lint, PHPUnit, `composer audit` |
-| **Web** | `make lint-web test-web` — `npm ci` against the committed lock, `tsc --noEmit`, ESLint, Prettier, Vitest |
-| **Docker** | `make build up smoke` — builds both images, starts the stack, waits for health, and curls the API, the frontend and the proxied endpoint |
+| Job        | Checks                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API**    | `make validate-api lint-api test-api audit-api` — manifest/lock agreement, formatting, PHPStan at level max, service-container lint, YAML lint, PHPUnit, `composer audit` |
+| **Web**    | `make lint-web test-web` — `npm ci` against the committed lock, `tsc --noEmit`, ESLint, Prettier, Vitest                                                                  |
+| **Docker** | `make build up smoke` — builds both images, starts the stack, waits for health, and curls the API, the frontend and the proxied endpoint                                  |
 
 The Docker job exists because a green test suite says nothing about whether `docker compose up` — the
 thing a reader will actually do — still works.
 
 A single aggregating `CI` check depends on all three, so branch protection needs one required status
 rather than reconfiguration whenever a job is added.
-
-Tagging `v*` builds both images and publishes them to GHCR. **There is no deploy step**: this exercise has
-no environment to deploy to, and a stubbed one would be worse than its absence.

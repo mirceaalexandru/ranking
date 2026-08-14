@@ -6,7 +6,6 @@ namespace App\Tests\Unit\Csv;
 
 use App\Csv\BudgetHistoryReader;
 use App\Csv\CsvError;
-use App\Domain\Period;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -15,9 +14,9 @@ final class BudgetHistoryReaderTest extends TestCase
 {
     private const string SAMPLE = __DIR__.'/../../../fixtures/sample.csv';
 
-    private function read(string $csv, ?Period $period = null): \App\Csv\ReadResult
+    private function read(string $csv): \App\Csv\ReadResult
     {
-        return (new BudgetHistoryReader())->read($csv, $period);
+        return (new BudgetHistoryReader())->read($csv);
     }
 
     private function header(string ...$rows): string
@@ -160,15 +159,62 @@ final class BudgetHistoryReaderTest extends TestCase
         self::assertStringContainsString('on line 2', $result->errors[0]->message);
     }
 
-    public function testItRejectsRowsOutsideTheDeclaredPeriod(): void
+    /**
+     * An extra zero in a spreadsheet should be refused, not honoured. Without
+     * this, a budget in the tens of millions overflowed the pacing arithmetic
+     * and produced a 500 rather than a message.
+     */
+    public function testItRejectsAnImplausiblyLargeBudget(): void
     {
-        $period = new Period(new DateTimeImmutable('2019-01-01'), new DateTimeImmutable('2019-03-31'));
-
-        $result = $this->read($this->header('2019-04-01,10:00,2'), $period);
+        $result = $this->read($this->header('2019-01-01,10:00,10000000'));
 
         self::assertFalse($result->isSuccessful());
-        self::assertSame('date', $result->errors[0]->column);
-        self::assertStringContainsString('outside the period', $result->errors[0]->message);
+        self::assertSame(2, $result->errors[0]->line);
+        self::assertSame('budget', $result->errors[0]->column);
+        self::assertStringContainsString('not accepted', $result->errors[0]->message);
+    }
+
+    /**
+     * A number that is too large and a number that is not a number are different
+     * problems, and a reader acting on the message needs to be told which.
+     */
+    public function testAnAmountTooLargeIsReportedAsSuchRatherThanAsBadFormatting(): void
+    {
+        $result = $this->read($this->header('2019-01-01,10:00,99999999999999999999'));
+
+        self::assertFalse($result->isSuccessful());
+        self::assertSame('budget', $result->errors[0]->column);
+        self::assertStringContainsString('too large', $result->errors[0]->message);
+        self::assertStringNotContainsString('decimal places', $result->errors[0]->message);
+    }
+
+    public function testItAcceptsABudgetAtTheCeiling(): void
+    {
+        $result = $this->read($this->header('2019-01-01,10:00,1000000'));
+
+        self::assertTrue($result->isSuccessful());
+        self::assertSame(100_000_000, $result->history()->changes[0]->amount->cents);
+    }
+
+    /**
+     * Two rows a century apart would be reported a day at a time — 36,500 rows,
+     * which exhausted memory and returned a truncated fatal error instead of
+     * JSON.
+     */
+    public function testItRejectsAFileSpanningAnAbsurdPeriod(): void
+    {
+        $result = $this->read($this->header('2019-01-01,10:00,5', '2119-12-31,10:00,5'));
+
+        self::assertFalse($result->isSuccessful());
+        self::assertStringContainsString('spans', $result->errors[0]->message);
+        self::assertSame(3, $result->errors[0]->line, 'reported against the row that ends the span');
+    }
+
+    public function testItAcceptsAFileSpanningSeveralYears(): void
+    {
+        $result = $this->read($this->header('2019-01-01,10:00,5', '2023-01-01,10:00,5'));
+
+        self::assertTrue($result->isSuccessful());
     }
 
     public function testItRejectsAMissingOrMisspelledHeader(): void

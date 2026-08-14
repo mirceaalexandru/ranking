@@ -6,10 +6,10 @@ namespace App\Csv;
 
 use App\Domain\BudgetChange;
 use App\Domain\BudgetHistory;
+use App\Domain\Exception\AmountOutOfRange;
+use App\Domain\Exception\MalformedAmount;
 use App\Domain\Money;
-use App\Domain\Period;
 use DateTimeImmutable;
-use InvalidArgumentException;
 
 /**
  * Reads a budget history from CSV.
@@ -31,7 +31,11 @@ final readonly class BudgetHistoryReader
     private const string BOM = "\xEF\xBB\xBF";
     private const array HEADER = ['date', 'time', 'budget'];
 
-    public function read(string $contents, ?Period $period = null): ReadResult
+    private const int MAX_BUDGET_CENTS = 100_000_000;
+
+    private const int MAX_PERIOD_DAYS = 1830;
+
+    public function read(string $contents): ReadResult
     {
         $lines = $this->split($contents);
 
@@ -50,6 +54,7 @@ final readonly class BudgetHistoryReader
         $errors = [];
         $changes = [];
         $seenAt = [];
+        $lastLine = $headerLine;
 
         foreach (array_slice($lines, 1) as [$lineNumber, $fields]) {
             if (count($fields) !== count(self::HEADER)) {
@@ -77,11 +82,20 @@ final readonly class BudgetHistoryReader
                 continue;
             }
 
+            // Caught separately: "that is not a number" and "that number is too
+            // big" send a reader looking in different places, so they must not
+            // arrive as the same message.
             try {
                 $amount = Money::fromDecimalString($rawBudget);
-            } catch (InvalidArgumentException) {
+            } catch (MalformedAmount) {
                 $errors[] = new CsvError($lineNumber, 'budget', sprintf(
                     'Expected an amount with at most two decimal places, got "%s".',
+                    $rawBudget,
+                ));
+                continue;
+            } catch (AmountOutOfRange) {
+                $errors[] = new CsvError($lineNumber, 'budget', sprintf(
+                    'The budget "%s" is too large to represent exactly.',
                     $rawBudget,
                 ));
                 continue;
@@ -90,6 +104,15 @@ final readonly class BudgetHistoryReader
             if ($amount->isNegative()) {
                 $errors[] = new CsvError($lineNumber, 'budget', sprintf(
                     'A budget cannot be negative, got %s.',
+                    $amount->toDecimalString(),
+                ));
+                continue;
+            }
+
+            if ($amount->cents > self::MAX_BUDGET_CENTS) {
+                $errors[] = new CsvError($lineNumber, 'budget', sprintf(
+                    'A daily budget above %s is not accepted, got %s.',
+                    Money::fromCents(self::MAX_BUDGET_CENTS)->toDecimalString(),
                     $amount->toDecimalString(),
                 ));
                 continue;
@@ -108,16 +131,7 @@ final readonly class BudgetHistoryReader
             }
             $seenAt[$key] = $lineNumber;
 
-            if (null !== $period && !$period->contains($at)) {
-                $errors[] = new CsvError($lineNumber, 'date', sprintf(
-                    '%s falls outside the period %s to %s.',
-                    $at->format('Y-m-d'),
-                    $period->start->format('Y-m-d'),
-                    $period->end->format('Y-m-d'),
-                ));
-                continue;
-            }
-
+            $lastLine = $lineNumber;
             $changes[] = new BudgetChange($at, $amount);
         }
 
@@ -131,7 +145,20 @@ final readonly class BudgetHistoryReader
             ]);
         }
 
-        return ReadResult::success(new BudgetHistory($changes));
+        $history = new BudgetHistory($changes);
+        $span = $history->coveringPeriod()->dayCount();
+
+        if ($span > self::MAX_PERIOD_DAYS) {
+            return ReadResult::failure([
+                new CsvError($lastLine, 'date', sprintf(
+                    'The file spans %d days, which would be reported a day at a time. The limit is %d.',
+                    $span,
+                    self::MAX_PERIOD_DAYS,
+                )),
+            ]);
+        }
+
+        return ReadResult::success($history);
     }
 
     /**

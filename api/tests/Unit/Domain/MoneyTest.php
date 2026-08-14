@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Domain;
 
+use App\Domain\Exception\AmountOutOfRange;
+use App\Domain\Exception\MalformedAmount;
 use App\Domain\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -49,6 +51,9 @@ final class MoneyTest extends TestCase
         yield 'comma decimal separator' => ['1,50'];
         yield 'scientific notation' => ['1e3'];
         yield 'trailing dot' => ['1.'];
+        // Beyond PHP_INT_MAX: casting saturates, and x100 then overflows to a
+        // float, so this has to be caught before the arithmetic rather than by it.
+        yield 'far beyond the integer range' => ['99999999999999999999'];
     }
 
     /**
@@ -96,6 +101,40 @@ final class MoneyTest extends TestCase
 
         self::assertSame(700, Money::max(...$values)->cents);
         self::assertSame(0, Money::min(...$values)->cents);
+    }
+
+    public function testTheTwoWaysAnAmountCanBeRejectedAreDistinguishable(): void
+    {
+        try {
+            Money::fromDecimalString('not-a-number');
+            self::fail('expected a rejection');
+        } catch (MalformedAmount) {
+            // expected
+        }
+
+        try {
+            Money::fromDecimalString('99999999999999999999');
+            self::fail('expected a rejection');
+        } catch (AmountOutOfRange) {
+            // expected
+        }
+
+        // Both remain InvalidArgumentException, so existing callers still work.
+        self::assertInstanceOf(InvalidArgumentException::class, MalformedAmount::from('x'));
+        self::assertInstanceOf(InvalidArgumentException::class, AmountOutOfRange::from('x'));
+    }
+
+    public function testItAcceptsTheLargestAmountThatStillFitsExactly(): void
+    {
+        $money = Money::fromDecimalString('999999999999999.99');
+
+        self::assertSame(99_999_999_999_999_999, $money->cents);
+        self::assertSame('999999999999999.99', $money->toDecimalString());
+    }
+
+    public function testLeadingZeroesDoNotCountTowardsTheDigitLimit(): void
+    {
+        self::assertSame(700, Money::fromDecimalString('0000000000000000007')->cents);
     }
 
     public function testHeadroomMayBeNegative(): void

@@ -84,9 +84,15 @@ maximum.
 `date, time, budget`. Dates are ISO `YYYY-MM-DD` in files the project owns; the reader also accepts the
 exercise's `MM.DD.YYYY` so its own notation can be used unchanged.
 
-**FR-13 — Validation reports every problem, with line numbers.** A malformed time, a negative amount, a
-duplicate timestamp or a row outside the period is reported against the line that caused it. The reader
-makes one pass and returns all errors, rather than failing on the first.
+**FR-13 — Validation reports every problem, with line numbers.** A malformed time, a negative amount or a
+duplicate timestamp is reported against the line that caused it. The reader makes one pass and returns all
+errors, rather than failing on the first.
+
+**FR-13a — Implausible input is refused, not honoured.** A daily budget above **1,000,000.00** is rejected
+as a typo, and a file spanning more than **1,830 days** is rejected rather than reported a day at a time.
+Both are returned as ordinary line-numbered validation errors. The budget ceiling also bounds the pacing
+arithmetic inside PHP's integer range; a test at the ceiling asserts this, so raising it fails there
+rather than in production.
 
 **FR-14 — The server is stateless.** Nothing is stored between requests: no database, and no server-side
 working copy. A simulation takes the uploaded history and returns the result. The exercise asks for
