@@ -29,20 +29,9 @@ use App\Domain\SeededRandom;
  */
 final readonly class PacedAlgorithm implements CostAlgorithm
 {
-    /**
-     * Days vary by this much around their share.
-     *
-     * Without jitter every day lands exactly on its budget, the 2× ceiling is
-     * never approached, and rule 1 becomes a cap that never visibly binds. With
-     * too much, the month front-loads again. This range spends about 44% of days
-     * above one budget while leaving no empty tail.
-     */
-    private const int JITTER_MIN = 55;
-    private const int JITTER_MAX = 155;
-
     public function spendDay(DaySession $day, SeededRandom $random): void
     {
-        $target = $this->targetFor($day, $random);
+        $target = $this->targetFor($day);
 
         foreach ($day->moments() as $index => $moment) {
             if (!$day->roomAt($moment)->isPositive()) {
@@ -67,7 +56,7 @@ final readonly class PacedAlgorithm implements CostAlgorithm
         }
     }
 
-    private function targetFor(DaySession $day, SeededRandom $random): Money
+    private function targetFor(DaySession $day): Money
     {
         $weight = $day->remainingWeight();
 
@@ -80,9 +69,7 @@ final readonly class PacedAlgorithm implements CostAlgorithm
             $weight->cents,
         );
 
-        $jittered = intdiv($share * $random->intBetween(self::JITTER_MIN, self::JITTER_MAX), 100);
-
         // Never aim above what the daily rule would permit anyway.
-        return Money::fromCents(max(0, min($jittered, $day->maxBudget()->cents * 2)));
+        return Money::fromCents(min($share, $day->maxBudget()->cents * 2));
     }
 }
