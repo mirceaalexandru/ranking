@@ -176,7 +176,8 @@ The starting point is that **the 2× is overdelivery headroom for a good day, no
 is how the real product behaves: a campaign may overspend a given day while the monthly charge stays
 within the daily budget × ~30.4. Costs should therefore average to the budget and vary up to twice it.
 
-Each day is given a target — its share of what the month has left, weighted by its own budget:
+Each day is given a target — its share of what the month has left, weighted by its own budget, capped
+at `2 × B` so it can never aim above what rule 1 allows:
 
 ```
 share = remaining allowance × maxBudget(today) / Σ maxBudget(today … end of month)
@@ -190,7 +191,7 @@ Day 1 — remaining allowance 310, today's budget 10, remaining weight 31 × 10 
 share = 310 × 10 / 310 = 10.00        ← exactly the day's own budget
 ```
 
-Say jitter takes it to 14 and the day spends that. Day 2 then has 296 left over a weight of 300:
+Say the day spends 14. Day 2 then has 296 left over a weight of 300:
 
 ```
 share = 296 × 10 / 300 =  9.87        ← every later day shrinks slightly
@@ -201,12 +202,6 @@ overspend is absorbed gradually rather than discovered as a wall halfway through
 
 **The weighting matters.** A day at budget 6 beside a day at budget 2 receives three times the share, not
 an equal slice — which would starve the expensive day and overfeed the cheap one.
-
-**Jitter is not decoration.** The share is multiplied by a random factor between 0.55 and 1.55, then
-capped at `2 × B` so it can never aim above what rule 1 allows. Without it every day lands exactly on its
-budget, the 2× ceiling is never approached, and the daily cap becomes a rule that never visibly binds.
-With too much, the month front-loads again. The current range spends about **44% of days above one
-budget** while leaving no empty tail.
 
 Within the day, the target is divided across the remaining attempts, each drawn from
 `uniform(0.01, 2 × even share)` so a day's costs differ in size rather than arriving as *n* identical
